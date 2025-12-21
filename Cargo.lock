@@ -3,9 +3,9 @@
 version = 4
 
 [[package]]
-name = "cront-core"
+name = "cront"
 version = "0.1.0"
 
 [[package]]
-name = "cront-server"
+name = "cront-core"
 version = "0.1.0"
