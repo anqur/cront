@@ -1,4 +1,4 @@
-use crate::syntax::lex::{Symbol, Token};
+use crate::syntax::lex::{Keyword, Symbol, Token};
 use crate::syntax::{Span, Spanned, SyntaxError};
 use crate::{BuiltinType, Float, Integer, Type};
 use chumsky::Parser;
@@ -111,6 +111,38 @@ pub enum Object {
 pub enum Access {
     Named(Spanned<Ustr>),
     Indexed(usize),
+}
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Expr(Expr),
+
+    Assign {
+        name: Spanned<Ident>,
+        typ: Option<Spanned<Expr>>,
+        rhs: Spanned<Expr>,
+    },
+    Update {
+        name: Spanned<Ident>,
+        rhs: Spanned<Expr>,
+    },
+
+    Return(Option<Spanned<Expr>>),
+    If {
+        then: Branch,
+        elif: Vec<Branch>,
+        els: Option<(Span, Vec<Spanned<Self>>)>,
+    },
+    While(Branch),
+    Break,
+    Continue,
+}
+
+#[derive(Debug, Clone)]
+pub struct Branch {
+    pub span: Span,
+    pub cond: Spanned<Expr>,
+    pub body: Vec<Spanned<Stmt>>,
 }
 
 enum Chainer {
@@ -247,5 +279,118 @@ where
             infix(left(1), just(Token::Symbol(Symbol::EqEq)), Expr::binary),
         ))
         .labelled("expression")
+    })
+}
+
+pub fn stmt<'t, I>() -> impl Parser<'t, I, Spanned<Stmt>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = Span>,
+{
+    let assign = just(Token::Keyword(Keyword::Let))
+        .ignore_then(id())
+        .then(
+            just(Token::Symbol(Symbol::Colon))
+                .ignore_then(expr())
+                .or_not(),
+        )
+        .then_ignore(just(Token::Symbol(Symbol::Eq)))
+        .then(expr())
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|((id, typ), rhs)| Stmt::Assign {
+            name: id.map(Ident::Id),
+            typ,
+            rhs,
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("assignment statement");
+
+    let update = id()
+        .then_ignore(just(Token::Symbol(Symbol::Eq)))
+        .then(expr())
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|(id, rhs)| Stmt::Update {
+            name: id.map(Ident::Id),
+            rhs,
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("update statement");
+
+    let r#break = just(Token::Keyword(Keyword::Break))
+        .ignore_then(just(Token::Symbol(Symbol::Semi)))
+        .ignored()
+        .map(|_| Stmt::Break)
+        .map_with(Spanned::from_map_extra)
+        .labelled("break statement");
+
+    let r#continue = just(Token::Keyword(Keyword::Continue))
+        .ignore_then(just(Token::Symbol(Symbol::Semi)))
+        .ignored()
+        .map(|_| Stmt::Break)
+        .map_with(Spanned::from_map_extra)
+        .labelled("continue statement");
+
+    let r#return = just(Token::Keyword(Keyword::Return))
+        .ignore_then(expr().or_not())
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(Stmt::Return)
+        .map_with(Spanned::from_map_extra)
+        .labelled("return statement");
+
+    let cmd = expr()
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|e| e.map(Stmt::Expr))
+        .labelled("expression statement");
+
+    let cond = |kw| {
+        just(Token::Keyword(kw))
+            .map_with(|_, e| e.span())
+            .then(expr())
+    };
+
+    recursive(|stmt| {
+        let stmts = stmt.repeated().collect::<Vec<_>>().labelled("statements");
+
+        let branch = cond(Keyword::If)
+            .then(stmts.clone().delimited_by(
+                just(Token::Symbol(Symbol::LBrace)),
+                just(Token::Symbol(Symbol::RBrace)),
+            ))
+            .map(|((span, cond), body)| Branch { span, cond, body })
+            .labelled("if branch");
+
+        let r#if = branch
+            .clone()
+            .then(
+                just(Token::Keyword(Keyword::Else))
+                    .ignore_then(branch)
+                    .repeated()
+                    .collect::<Vec<_>>(),
+            )
+            .then(
+                just(Token::Keyword(Keyword::Else))
+                    .map_with(|_, e| e.span())
+                    .then(stmts.clone().delimited_by(
+                        just(Token::Symbol(Symbol::LBrace)),
+                        just(Token::Symbol(Symbol::RBrace)),
+                    ))
+                    .or_not(),
+            )
+            .map(|((then, elif), els)| Stmt::If { then, elif, els })
+            .map_with(Spanned::from_map_extra)
+            .labelled("if statement");
+
+        let r#while = cond(Keyword::While)
+            .then(stmts.clone().delimited_by(
+                just(Token::Symbol(Symbol::LBrace)),
+                just(Token::Symbol(Symbol::RBrace)),
+            ))
+            .map(|((span, cond), body)| Stmt::While(Branch { span, cond, body }))
+            .map_with(Spanned::from_map_extra)
+            .labelled("while statement");
+
+        choice((
+            r#if, r#while, r#break, r#continue, assign, update, r#return, cmd,
+        ))
+        .labelled("statement")
     })
 }

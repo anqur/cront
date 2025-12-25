@@ -35,7 +35,13 @@ impl Container<Spanned<Token>> for Tokens {
 #[strum(serialize_all = "lowercase")]
 pub enum Keyword {
     Fun,
+    Let,
     If,
+    Else,
+    For,
+    While,
+    Break,
+    Continue,
     Return,
 }
 
@@ -52,6 +58,7 @@ pub enum Symbol {
     Lt,
     Gt,
     Semi,
+    Colon,
     Comma,
     Dot,
     Eq,
@@ -146,6 +153,7 @@ pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
         just('<').to(Symbol::Lt),
         just('>').to(Symbol::Gt),
         just(';').to(Symbol::Semi),
+        just(':').to(Symbol::Colon),
         just(',').to(Symbol::Comma),
         just('.').to(Symbol::Dot),
         just('@').to(Symbol::At),
