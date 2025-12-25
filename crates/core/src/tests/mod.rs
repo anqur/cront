@@ -1,4 +1,4 @@
-use crate::parse::lex::lex;
+use crate::syntax::lex::lex;
 use chumsky::Parser;
 
 #[test]

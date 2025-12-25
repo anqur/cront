@@ -1,75 +1,13 @@
-mod parse;
+mod syntax;
 #[cfg(test)]
 mod tests;
 
-pub use crate::parse::lex::lex;
-use chumsky::extra::ParserExtra;
-use chumsky::input::MapExtra;
-use chumsky::prelude::{Input, SimpleSpan};
+pub use crate::syntax::lex::lex;
+pub use crate::syntax::parse::expr;
 use strum::{Display, EnumString};
-use ustr::Ustr;
 
-type Span = SimpleSpan;
-
-#[derive(Debug, Clone)]
-struct Spanned<T> {
-    span: Span,
-    item: T,
-}
-
-impl<T> Spanned<T> {
-    fn from_map_extra<'src, 'b, I, E>(item: T, e: &mut MapExtra<'src, 'b, I, E>) -> Self
-    where
-        I: Input<'src, Span = Span>,
-        E: ParserExtra<'src, I>,
-    {
-        Self {
-            span: e.span(),
-            item,
-        }
-    }
-}
-
-#[derive(Debug, Clone, EnumString, Display)]
-#[strum(serialize_all = "lowercase")]
-enum Keyword {
-    Fun,
-    If,
-    Return,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Display)]
-enum Symbol {
-    LParen,
-    RParen,
-    LBrace,
-    RBrace,
-    Semi,
-    At,
-}
-
-#[derive(Debug, Clone, Display)]
-enum Token {
-    #[strum(transparent)]
-    Number(Ustr),
-    #[strum(transparent)]
-    String(String),
-    #[strum(transparent)]
-    Boolean(bool),
-    #[strum(transparent)]
-    Ident(Ustr),
-    #[strum(transparent)]
-    Doc(String),
-    #[strum(transparent)]
-    Symbol(Symbol),
-    #[strum(transparent)]
-    BuiltinType(BuiltinType),
-    #[strum(transparent)]
-    Keyword(Keyword),
-}
-
-#[derive(Default, Debug, Copy, Clone, EnumString, Display)]
-enum BuiltinType {
+#[derive(Default, Debug, Copy, Clone, Eq, PartialEq, EnumString, Display)]
+pub enum BuiltinType {
     #[default]
     Void,
     Bool,
@@ -85,4 +23,29 @@ enum BuiltinType {
     F32,
     F64,
     Type,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Integer {
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    USize(usize),
+    U64(u64),
+}
+
+#[derive(Debug, Clone)]
+pub enum Float {
+    F32(f32),
+    F64(f64),
+}
+
+#[derive(Debug, Clone, Display)]
+pub enum Type {
+    #[strum(transparent)]
+    Builtin(BuiltinType),
 }

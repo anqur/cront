@@ -1,5 +1,5 @@
-use crate::parse::LexError;
-use crate::{BuiltinType, Keyword, Span, Spanned, Symbol, Token};
+use crate::BuiltinType;
+use crate::syntax::{Span, Spanned, SyntaxError};
 use chumsky::Parser;
 use chumsky::container::Container;
 use chumsky::error::Rich;
@@ -8,6 +8,8 @@ use chumsky::prelude::{
 };
 use chumsky::text::{digits, ident, int};
 use std::str::FromStr;
+use strum::{Display, EnumString};
+use ustr::Ustr;
 
 #[derive(Default)]
 pub struct Tokens {
@@ -28,6 +30,58 @@ impl Container<Spanned<Token>> for Tokens {
         self.tokens.push(item);
     }
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, EnumString, Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum Keyword {
+    Fun,
+    If,
+    Return,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Display)]
+pub enum Symbol {
+    EqEq,
+    Le,
+    Ge,
+
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    Lt,
+    Gt,
+    Semi,
+    Comma,
+    Dot,
+    Eq,
+    At,
+    Plus,
+    Minus,
+    Mul,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Display)]
+pub enum Token {
+    #[strum(transparent)]
+    Number(Ustr),
+    #[strum(transparent)]
+    String(String),
+    #[strum(transparent)]
+    Boolean(bool),
+    #[strum(transparent)]
+    Ident(Ustr),
+    #[strum(transparent)]
+    Doc(String),
+    #[strum(transparent)]
+    Symbol(Symbol),
+    #[strum(transparent)]
+    BuiltinType(BuiltinType),
+    #[strum(transparent)]
+    Keyword(Keyword),
+}
+
+type LexError<'a> = SyntaxError<'a, char>;
 
 pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
     let dec = digits(10).to_slice();
@@ -82,12 +136,23 @@ pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
     });
 
     let symbol = choice((
+        just("==").to(Symbol::EqEq),
+        just("<=").to(Symbol::Le),
+        just(">=").to(Symbol::Ge),
         just('(').to(Symbol::LParen),
         just(')').to(Symbol::RParen),
         just('{').to(Symbol::LBrace),
         just('}').to(Symbol::RBrace),
+        just('<').to(Symbol::Lt),
+        just('>').to(Symbol::Gt),
         just(';').to(Symbol::Semi),
+        just(',').to(Symbol::Comma),
+        just('.').to(Symbol::Dot),
         just('@').to(Symbol::At),
+        just('=').to(Symbol::Eq),
+        just('+').to(Symbol::Plus),
+        just('-').to(Symbol::Minus),
+        just('*').to(Symbol::Mul),
     ))
     .map(Token::Symbol);
 
