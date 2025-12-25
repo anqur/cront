@@ -1,10 +1,7 @@
-#[cfg(test)]
-mod tests {
-    use crate::add;
+use crate::parse::lex::lex;
+use chumsky::Parser;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[test]
+fn it_scans() {
+    lex().parse(include_str!("hello.cront")).unwrap();
 }
