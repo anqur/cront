@@ -4,6 +4,7 @@ mod tests;
 
 pub use crate::syntax::lex::lex;
 pub use crate::syntax::parse::expr;
+pub use crate::syntax::parse::file;
 pub use crate::syntax::parse::stmt;
 use strum::{Display, EnumString};
 

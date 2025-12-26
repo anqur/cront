@@ -145,6 +145,49 @@ pub struct Branch {
     pub body: Vec<Spanned<Stmt>>,
 }
 
+#[derive(Debug)]
+pub struct Decl {
+    doc: Vec<String>,
+    sig: Sig,
+    def: Def,
+}
+
+#[derive(Debug)]
+enum Sig {
+    Func(FuncSig),
+}
+
+#[derive(Debug)]
+struct FuncSig {
+    name: Spanned<Id>,
+    constrs: Vec<Spanned<Constr>>,
+    params: Vec<Spanned<Param>>,
+    ret: Option<Spanned<Expr>>,
+}
+
+#[derive(Debug)]
+struct Param {
+    name: Ident,
+    typ: Spanned<Expr>,
+}
+
+#[derive(Debug)]
+struct Constr {
+    typ: Ident,
+    constr: Spanned<Expr>,
+}
+
+#[derive(Debug)]
+enum Def {
+    Func { body: Vec<Spanned<Stmt>> },
+}
+
+#[derive(Default, Debug)]
+pub struct File {
+    decls: Vec<Spanned<Decl>>,
+    main: Option<Id>,
+}
+
 enum Chainer {
     Args(Vec<Spanned<Expr>>),
     Initialize(Vec<(Spanned<Ustr>, Spanned<Expr>)>),
@@ -269,6 +312,7 @@ where
             .labelled("call expression");
 
         call.pratt((
+            infix(left(4), just(Token::Symbol(Symbol::At)), Expr::binary),
             infix(left(3), just(Token::Symbol(Symbol::Mul)), Expr::binary),
             infix(left(2), just(Token::Symbol(Symbol::Plus)), Expr::binary),
             infix(left(2), just(Token::Symbol(Symbol::Minus)), Expr::binary),
@@ -315,19 +359,17 @@ where
         .map_with(Spanned::from_map_extra)
         .labelled("update statement");
 
-    let r#break = just(Token::Keyword(Keyword::Break))
-        .ignore_then(just(Token::Symbol(Symbol::Semi)))
-        .ignored()
-        .map(|_| Stmt::Break)
-        .map_with(Spanned::from_map_extra)
-        .labelled("break statement");
+    let ctrl = |kw, stmt: Stmt| {
+        just(Token::Keyword(kw))
+            .ignore_then(just(Token::Symbol(Symbol::Semi)))
+            .ignored()
+            .map(move |_| stmt.clone())
+            .map_with(Spanned::from_map_extra)
+    };
 
-    let r#continue = just(Token::Keyword(Keyword::Continue))
-        .ignore_then(just(Token::Symbol(Symbol::Semi)))
-        .ignored()
-        .map(|_| Stmt::Break)
-        .map_with(Spanned::from_map_extra)
-        .labelled("continue statement");
+    let r#break = ctrl(Keyword::Break, Stmt::Break).labelled("break statement");
+
+    let r#continue = ctrl(Keyword::Continue, Stmt::Continue).labelled("continue statement");
 
     let r#return = just(Token::Keyword(Keyword::Return))
         .ignore_then(expr().or_not())
@@ -393,4 +435,96 @@ where
         ))
         .labelled("statement")
     })
+}
+
+fn docstring<'t, I>() -> impl Parser<'t, I, Vec<String>, ParseError<'t>> + Clone
+where
+    I: ValueInput<'t, Token = Token, Span = Span>,
+{
+    select(|x, _| match x {
+        Token::Doc(s) => Some(s),
+        _ => None,
+    })
+    .repeated()
+    .collect::<Vec<_>>()
+    .labelled("docstring")
+}
+
+fn type_params<'t, I>() -> impl Parser<'t, I, Vec<Spanned<Constr>>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = Span>,
+{
+    let param = id()
+        .then(
+            just(Token::Symbol(Symbol::Colon))
+                .ignore_then(expr())
+                .or_not(),
+        )
+        .map(|(id, constr)| Spanned {
+            span: id.span,
+            item: Constr {
+                typ: Ident::Id(id.item),
+                constr: constr.unwrap_or(Spanned {
+                    span: id.span,
+                    item: Expr::BuiltinType(BuiltinType::Type),
+                }),
+            },
+        })
+        .labelled("type parameter");
+    grouped_by(Symbol::Lt, param, Symbol::Comma, Symbol::Gt)
+        .or_not()
+        .map(Option::unwrap_or_default)
+        .labelled("type parameters")
+}
+
+fn func<'t, I>() -> impl Parser<'t, I, Spanned<Decl>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = Span>,
+{
+    let param = id()
+        .then(just(Token::Symbol(Symbol::Colon)).ignore_then(expr()))
+        .map(|(id, typ)| {
+            id.map(|name| Param {
+                name: Ident::Id(name),
+                typ,
+            })
+        })
+        .labelled("parameter");
+
+    let params =
+        grouped_by(Symbol::LParen, param, Symbol::Comma, Symbol::RParen).labelled("parameters");
+
+    docstring()
+        .then_ignore(just(Token::Keyword(Keyword::Fun)))
+        .then(id())
+        .then(type_params())
+        .then(params)
+        .then(expr().or_not())
+        .then(stmt().repeated().collect().delimited_by(
+            just(Token::Symbol(Symbol::LBrace)),
+            just(Token::Symbol(Symbol::RBrace)),
+        ))
+        .map(|(((((doc, name), constrs), params), ret), body)| Decl {
+            doc,
+            sig: Sig::Func(FuncSig {
+                name,
+                constrs,
+                params,
+                ret,
+            }),
+            def: Def::Func { body },
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("function definition")
+}
+
+pub fn file<'t, I>() -> impl Parser<'t, I, File, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = Span>,
+{
+    func()
+        .repeated()
+        .collect::<Vec<_>>()
+        .map(|decls| File { decls, main: None })
+        .labelled("file")
 }

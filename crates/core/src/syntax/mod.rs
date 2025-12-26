@@ -1,4 +1,5 @@
 pub(crate) mod lex;
+#[allow(dead_code)]
 pub(crate) mod parse;
 
 use chumsky::error::Rich;

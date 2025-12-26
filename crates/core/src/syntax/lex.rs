@@ -13,8 +13,8 @@ use ustr::Ustr;
 
 #[derive(Default)]
 pub struct Tokens {
-    spans: Vec<Span>,
-    tokens: Vec<Token>,
+    pub spans: Vec<Span>,
+    pub tokens: Vec<Token>,
 }
 
 impl Container<Spanned<Token>> for Tokens {
