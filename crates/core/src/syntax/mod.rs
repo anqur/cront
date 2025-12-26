@@ -7,11 +7,9 @@ use chumsky::extra::{Err, ParserExtra};
 use chumsky::input::{Input, MapExtra};
 use chumsky::prelude::SimpleSpan;
 
-type Span = SimpleSpan;
-
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
-    span: Span,
+    span: SimpleSpan,
     item: T,
 }
 
@@ -28,7 +26,7 @@ impl<T> Spanned<T> {
 
     fn from_map_extra<'src, 'b, I, E>(item: T, e: &mut MapExtra<'src, 'b, I, E>) -> Self
     where
-        I: Input<'src, Span = Span>,
+        I: Input<'src, Span = SimpleSpan>,
         E: ParserExtra<'src, I>,
     {
         Self {
@@ -38,4 +36,4 @@ impl<T> Spanned<T> {
     }
 }
 
-type SyntaxError<'a, T> = Err<Rich<'a, T, Span>>;
+type SyntaxError<'a, T> = Err<Rich<'a, T, SimpleSpan>>;

@@ -2,8 +2,12 @@ use crate::file;
 use crate::syntax::lex::lex;
 use chumsky::Parser;
 
+const TEXTS: &[&str] = &[include_str!("main.cront"), include_str!("struct.cront")];
+
 #[test]
 fn it_parses() {
-    let tokens = lex().parse(include_str!("hello.cront")).unwrap();
-    file().parse(tokens.tokens.as_slice()).unwrap();
+    for text in TEXTS {
+        let tokens = lex().parse(text).unwrap();
+        file().parse(tokens.tokens.as_slice()).unwrap();
+    }
 }

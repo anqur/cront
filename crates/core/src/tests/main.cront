@@ -1,0 +1,5 @@
+fun main() CInt<I32> {
+    let a = 42;
+    println("{a}");
+    return 0;
+}

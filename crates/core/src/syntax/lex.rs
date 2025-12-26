@@ -1,10 +1,10 @@
 use crate::BuiltinType;
-use crate::syntax::{Span, Spanned, SyntaxError};
+use crate::syntax::{Spanned, SyntaxError};
 use chumsky::Parser;
 use chumsky::container::Container;
 use chumsky::error::Rich;
 use chumsky::prelude::{
-    IterParser, any, choice, end, just, none_of, one_of, skip_then_retry_until,
+    IterParser, SimpleSpan, any, choice, end, just, none_of, one_of, skip_then_retry_until,
 };
 use chumsky::text::{digits, ident, int};
 use std::str::FromStr;
@@ -13,7 +13,7 @@ use ustr::Ustr;
 
 #[derive(Default)]
 pub struct Tokens {
-    pub spans: Vec<Span>,
+    pub spans: Vec<SimpleSpan>,
     pub tokens: Vec<Token>,
 }
 
@@ -43,6 +43,8 @@ pub enum Keyword {
     Break,
     Continue,
     Return,
+    Struct,
+    Typ,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Display)]
@@ -55,6 +57,8 @@ pub enum Symbol {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     Lt,
     Gt,
     Semi,
@@ -62,10 +66,10 @@ pub enum Symbol {
     Comma,
     Dot,
     Eq,
-    At,
     Plus,
     Minus,
     Mul,
+    Question,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Display)]
@@ -150,17 +154,19 @@ pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
         just(')').to(Symbol::RParen),
         just('{').to(Symbol::LBrace),
         just('}').to(Symbol::RBrace),
+        just('[').to(Symbol::LBracket),
+        just(']').to(Symbol::RBracket),
         just('<').to(Symbol::Lt),
         just('>').to(Symbol::Gt),
         just(';').to(Symbol::Semi),
         just(':').to(Symbol::Colon),
         just(',').to(Symbol::Comma),
         just('.').to(Symbol::Dot),
-        just('@').to(Symbol::At),
         just('=').to(Symbol::Eq),
         just('+').to(Symbol::Plus),
         just('-').to(Symbol::Minus),
         just('*').to(Symbol::Mul),
+        just('?').to(Symbol::Question),
     ))
     .map(Token::Symbol);
 

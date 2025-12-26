@@ -1,0 +1,16 @@
+/// Basic vector type.
+struct Vector<
+    /// Element type.
+    Elem,
+    /// Length type.
+    Len = USize,
+    /// Allocator type.
+    Alloc = Malloc,
+> {
+    /// Allocator type as a type member.
+    typ Alloc = Alloc;
+    /// Length of the vector.
+    len: Len;
+    /// Optional payload.
+    data?: []Elem;
+}

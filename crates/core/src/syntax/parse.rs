@@ -1,11 +1,11 @@
 use crate::syntax::lex::{Keyword, Symbol, Token};
-use crate::syntax::{Span, Spanned, SyntaxError};
+use crate::syntax::{Spanned, SyntaxError};
 use crate::{BuiltinType, Float, Integer, Type};
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;
 use chumsky::input::{MapExtra, ValueInput};
-use chumsky::pratt::{infix, left};
-use chumsky::prelude::{Input, IterParser, choice, just, recursive};
+use chumsky::pratt::{infix, left, prefix};
+use chumsky::prelude::{Input, IterParser, SimpleSpan, choice, just, recursive};
 use chumsky::primitive::select;
 use serde_json::from_str;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
@@ -59,12 +59,121 @@ pub enum Ident {
     Idx(usize),
 }
 
+#[derive(Default, Debug)]
+pub struct File {
+    decls: Vec<Spanned<Doc<Decl>>>,
+    main: Option<Id>,
+}
+
+#[derive(Debug)]
+struct Doc<T> {
+    doc: Vec<String>,
+    item: T,
+}
+
+impl<T> Doc<T> {
+    fn map<F, U>(self, f: F) -> Doc<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        Doc {
+            doc: self.doc,
+            item: f(self.item),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Decl {
+    sig: Sig,
+    def: Def,
+}
+
+#[derive(Debug)]
+enum Sig {
+    Fun(Fun),
+    Struct {
+        name: Spanned<Ident>,
+        constrs: Vec<Spanned<Doc<Constr>>>,
+        members: Vec<Spanned<Doc<Member>>>,
+        optional: Option<Spanned<Doc<Param>>>,
+    },
+}
+
+#[derive(Debug)]
+struct Fun {
+    name: Spanned<Ident>,
+    constrs: Vec<Spanned<Doc<Constr>>>,
+    params: Vec<Spanned<Doc<Param>>>,
+    ret: Option<Spanned<Expr>>,
+}
+
+#[derive(Debug)]
+struct Param {
+    name: Spanned<Ident>,
+    typ: Spanned<Expr>,
+}
+
+#[derive(Debug)]
+struct Constr {
+    typ: Spanned<Ident>,
+    constr: Spanned<Expr>,
+    default: Option<Spanned<Expr>>,
+}
+
+#[derive(Debug)]
+enum Def {
+    Fun(Vec<Spanned<Stmt>>),
+    Struct,
+}
+
+#[derive(Debug)]
+enum Member {
+    Data(Param),
+    Type(Constr),
+}
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Expr(Expr),
+
+    Assign {
+        name: Spanned<Ident>,
+        typ: Option<Spanned<Expr>>,
+        rhs: Spanned<Expr>,
+    },
+    Update {
+        name: Spanned<Ident>,
+        rhs: Spanned<Expr>,
+    },
+
+    Return(Option<Spanned<Expr>>),
+    If {
+        then: Spanned<Branch>,
+        elif: Vec<Spanned<Branch>>,
+        els: Option<Spanned<Vec<Spanned<Self>>>>,
+    },
+    While(Branch),
+    Break,
+    Continue,
+}
+
+#[derive(Debug, Clone)]
+pub struct Branch {
+    pub cond: Spanned<Expr>,
+    pub body: Vec<Spanned<Stmt>>,
+}
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     Ident(Ident),
 
     BuiltinType(BuiltinType),
     Apply(Box<Spanned<Self>>, Vec<Spanned<Self>>),
+    ArrayType {
+        elem: Box<Spanned<Self>>,
+        len: Option<Box<Spanned<Self>>>,
+    },
 
     Integer(Integer),
     Float(Float),
@@ -91,7 +200,7 @@ impl Expr {
         e: &mut MapExtra<'src, 'b, I, E>,
     ) -> Spanned<Self>
     where
-        I: Input<'src, Span = Span>,
+        I: Input<'src, Span = SimpleSpan>,
         E: ParserExtra<'src, I>,
     {
         let Token::Symbol(sym) = op else {
@@ -113,86 +222,11 @@ pub enum Access {
     Indexed(usize),
 }
 
-#[derive(Debug, Clone)]
-pub enum Stmt {
-    Expr(Expr),
-
-    Assign {
-        name: Spanned<Ident>,
-        typ: Option<Spanned<Expr>>,
-        rhs: Spanned<Expr>,
-    },
-    Update {
-        name: Spanned<Ident>,
-        rhs: Spanned<Expr>,
-    },
-
-    Return(Option<Spanned<Expr>>),
-    If {
-        then: Branch,
-        elif: Vec<Branch>,
-        els: Option<(Span, Vec<Spanned<Self>>)>,
-    },
-    While(Branch),
-    Break,
-    Continue,
-}
-
-#[derive(Debug, Clone)]
-pub struct Branch {
-    pub span: Span,
-    pub cond: Spanned<Expr>,
-    pub body: Vec<Spanned<Stmt>>,
-}
-
-#[derive(Debug)]
-pub struct Decl {
-    doc: Vec<String>,
-    sig: Sig,
-    def: Def,
-}
-
-#[derive(Debug)]
-enum Sig {
-    Func(FuncSig),
-}
-
-#[derive(Debug)]
-struct FuncSig {
-    name: Spanned<Id>,
-    constrs: Vec<Spanned<Constr>>,
-    params: Vec<Spanned<Param>>,
-    ret: Option<Spanned<Expr>>,
-}
-
-#[derive(Debug)]
-struct Param {
-    name: Ident,
-    typ: Spanned<Expr>,
-}
-
-#[derive(Debug)]
-struct Constr {
-    typ: Ident,
-    constr: Spanned<Expr>,
-}
-
-#[derive(Debug)]
-enum Def {
-    Func { body: Vec<Spanned<Stmt>> },
-}
-
-#[derive(Default, Debug)]
-pub struct File {
-    decls: Vec<Spanned<Decl>>,
-    main: Option<Id>,
-}
-
 enum Chainer {
     Args(Vec<Spanned<Expr>>),
     Initialize(Vec<(Spanned<Ustr>, Spanned<Expr>)>),
     Access(Spanned<Ustr>),
-    Method(Spanned<Id>, Vec<Spanned<Expr>>),
+    Method(Spanned<Ident>, Vec<Spanned<Expr>>),
     TypeArgs(Vec<Spanned<Expr>>),
 }
 
@@ -205,7 +239,7 @@ fn grouped_by<'t, I, O, P>(
     rhs: Symbol,
 ) -> impl Parser<'t, I, Vec<O>, ParseError<'t>> + Clone
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
     P: Parser<'t, I, O, ParseError<'t>> + Clone,
 {
     parser
@@ -215,9 +249,24 @@ where
         .delimited_by(just(Token::Symbol(lhs)), just(Token::Symbol(rhs)))
 }
 
+fn grouped_with<'t, I, O, P>(
+    lhs: Symbol,
+    parser: P,
+    rhs: Symbol,
+) -> impl Parser<'t, I, Vec<O>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
+    P: Parser<'t, I, O, ParseError<'t>>,
+{
+    parser
+        .repeated()
+        .collect()
+        .delimited_by(just(Token::Symbol(lhs)), just(Token::Symbol(rhs)))
+}
+
 fn name<'t, I>() -> impl Parser<'t, I, Spanned<Ustr>, ParseError<'t>> + Clone
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
     select(|x, _| match x {
         Token::Ident(n) => Some(n),
@@ -227,16 +276,16 @@ where
     .labelled("name")
 }
 
-fn id<'t, I>() -> impl Parser<'t, I, Spanned<Id>, ParseError<'t>> + Clone
+fn ident<'t, I>() -> impl Parser<'t, I, Spanned<Ident>, ParseError<'t>> + Clone
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
-    name().map(|n| n.map(Id::bound)).labelled("identifier")
+    name().map(|n| n.map(|n| Ident::Id(Id::bound(n))))
 }
 
 pub fn expr<'t, I>() -> impl Parser<'t, I, Spanned<Expr>, ParseError<'t>> + Clone
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
     let constant = select(|x, _| {
         Some(match x {
@@ -255,12 +304,9 @@ where
     .map_with(Spanned::from_map_extra)
     .labelled("constant expression");
 
-    let ident = select(|x, _| match x {
-        Token::Ident(n) => Some(Expr::Ident(Ident::Id(Id::bound(n)))),
-        _ => None,
-    })
-    .map_with(Spanned::from_map_extra)
-    .labelled("identifier expression");
+    let i = ident()
+        .map(|i| i.map(Expr::Ident))
+        .labelled("identifier expression");
 
     recursive(|expr| {
         let args = grouped_by(Symbol::LParen, expr.clone(), Symbol::Comma, Symbol::RParen)
@@ -280,30 +326,30 @@ where
         .map(Chainer::Initialize)
         .labelled("object expression");
         let method = just(Token::Symbol(Symbol::Dot))
-            .ignore_then(id())
+            .ignore_then(ident())
             .then(args)
-            .map(|(id, args)| Chainer::Method(id, args))
+            .map(|(i, args)| Chainer::Method(i, args))
             .labelled("method expression");
         let access = just(Token::Symbol(Symbol::Dot))
             .ignore_then(name())
             .map(Chainer::Access)
             .labelled("access expression");
-        let type_args = grouped_by(Symbol::Lt, expr, Symbol::Comma, Symbol::Gt)
+        let type_args = grouped_by(Symbol::Lt, expr.clone(), Symbol::Comma, Symbol::Gt)
             .map(Chainer::TypeArgs)
             .labelled("type arguments");
         let chainer = choice((arguments, obj, method, access, type_args));
 
-        let call = choice((constant, ident))
+        let call = choice((constant, i))
             .foldl_with(chainer.repeated(), |a, c, e| Spanned {
                 span: e.span(),
                 item: match c {
                     Chainer::Args(args) => Expr::Call(Box::new(a), args),
                     Chainer::Initialize(xs) => Expr::Object(Box::new(a), Object::Unordered(xs)),
                     Chainer::Access(m) => Expr::Access(Box::new(a), Access::Named(m)),
-                    Chainer::Method(m, args) => Expr::Method {
+                    Chainer::Method(method, args) => Expr::Method {
                         callee: Box::new(a),
                         target: None,
-                        method: m.map(Ident::Id),
+                        method,
                         args,
                     },
                     Chainer::TypeArgs(args) => Expr::Apply(Box::new(a), args),
@@ -312,7 +358,22 @@ where
             .labelled("call expression");
 
         call.pratt((
-            infix(left(4), just(Token::Symbol(Symbol::At)), Expr::binary),
+            prefix(
+                4,
+                expr.or_not().delimited_by(
+                    just(Token::Symbol(Symbol::LBracket)),
+                    just(Token::Symbol(Symbol::RBracket)),
+                ),
+                |len: Option<_>, elem, e| {
+                    Spanned::from_map_extra(
+                        Expr::ArrayType {
+                            elem: Box::new(elem),
+                            len: len.map(Box::new),
+                        },
+                        e,
+                    )
+                },
+            ),
             infix(left(3), just(Token::Symbol(Symbol::Mul)), Expr::binary),
             infix(left(2), just(Token::Symbol(Symbol::Plus)), Expr::binary),
             infix(left(2), just(Token::Symbol(Symbol::Minus)), Expr::binary),
@@ -328,10 +389,10 @@ where
 
 pub fn stmt<'t, I>() -> impl Parser<'t, I, Spanned<Stmt>, ParseError<'t>>
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
     let assign = just(Token::Keyword(Keyword::Let))
-        .ignore_then(id())
+        .ignore_then(ident())
         .then(
             just(Token::Symbol(Symbol::Colon))
                 .ignore_then(expr())
@@ -340,36 +401,29 @@ where
         .then_ignore(just(Token::Symbol(Symbol::Eq)))
         .then(expr())
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
-        .map(|((id, typ), rhs)| Stmt::Assign {
-            name: id.map(Ident::Id),
-            typ,
-            rhs,
-        })
+        .map(|((name, typ), rhs)| Stmt::Assign { name, typ, rhs })
         .map_with(Spanned::from_map_extra)
         .labelled("assignment statement");
 
-    let update = id()
+    let update = ident()
         .then_ignore(just(Token::Symbol(Symbol::Eq)))
         .then(expr())
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
-        .map(|(id, rhs)| Stmt::Update {
-            name: id.map(Ident::Id),
-            rhs,
-        })
+        .map(|(name, rhs)| Stmt::Update { name, rhs })
         .map_with(Spanned::from_map_extra)
         .labelled("update statement");
 
-    let ctrl = |kw, stmt: Stmt| {
-        just(Token::Keyword(kw))
-            .ignore_then(just(Token::Symbol(Symbol::Semi)))
-            .ignored()
-            .map(move |_| stmt.clone())
-            .map_with(Spanned::from_map_extra)
-    };
+    let r#break = just(Token::Keyword(Keyword::Break))
+        .then(just(Token::Symbol(Symbol::Semi)))
+        .map(|_| Stmt::Break)
+        .map_with(Spanned::from_map_extra)
+        .labelled("break statement");
 
-    let r#break = ctrl(Keyword::Break, Stmt::Break).labelled("break statement");
-
-    let r#continue = ctrl(Keyword::Continue, Stmt::Continue).labelled("continue statement");
+    let r#continue = just(Token::Keyword(Keyword::Continue))
+        .then(just(Token::Symbol(Symbol::Semi)))
+        .map(|_| Stmt::Continue)
+        .map_with(Spanned::from_map_extra)
+        .labelled("continue statement");
 
     let r#return = just(Token::Keyword(Keyword::Return))
         .ignore_then(expr().or_not())
@@ -397,7 +451,10 @@ where
                 just(Token::Symbol(Symbol::LBrace)),
                 just(Token::Symbol(Symbol::RBrace)),
             ))
-            .map(|((span, cond), body)| Branch { span, cond, body })
+            .map(|((span, cond), body)| Spanned {
+                span,
+                item: Branch { cond, body },
+            })
             .labelled("if branch");
 
         let r#if = branch
@@ -415,6 +472,7 @@ where
                         just(Token::Symbol(Symbol::LBrace)),
                         just(Token::Symbol(Symbol::RBrace)),
                     ))
+                    .map(|(span, item)| Spanned { span, item })
                     .or_not(),
             )
             .map(|((then, elif), els)| Stmt::If { then, elif, els })
@@ -426,7 +484,7 @@ where
                 just(Token::Symbol(Symbol::LBrace)),
                 just(Token::Symbol(Symbol::RBrace)),
             ))
-            .map(|((span, cond), body)| Stmt::While(Branch { span, cond, body }))
+            .map(|((.., cond), body)| Stmt::While(Branch { cond, body }))
             .map_with(Spanned::from_map_extra)
             .labelled("while statement");
 
@@ -439,7 +497,7 @@ where
 
 fn docstring<'t, I>() -> impl Parser<'t, I, Vec<String>, ParseError<'t>> + Clone
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
     select(|x, _| match x {
         Token::Doc(s) => Some(s),
@@ -450,81 +508,161 @@ where
     .labelled("docstring")
 }
 
-fn type_params<'t, I>() -> impl Parser<'t, I, Vec<Spanned<Constr>>, ParseError<'t>>
+fn constr<'t, I>() -> impl Parser<'t, I, Spanned<Constr>, ParseError<'t>> + Clone
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
-    let param = id()
+    ident()
         .then(
             just(Token::Symbol(Symbol::Colon))
                 .ignore_then(expr())
                 .or_not(),
         )
-        .map(|(id, constr)| Spanned {
-            span: id.span,
-            item: Constr {
-                typ: Ident::Id(id.item),
-                constr: constr.unwrap_or(Spanned {
-                    span: id.span,
-                    item: Expr::BuiltinType(BuiltinType::Type),
-                }),
-            },
+        .then(just(Token::Symbol(Symbol::Eq)).ignore_then(expr()).or_not())
+        .map(|((typ, constr), default)| Constr {
+            constr: constr.unwrap_or(Spanned {
+                span: typ.span,
+                item: Expr::BuiltinType(BuiltinType::Type),
+            }),
+            typ,
+            default,
         })
-        .labelled("type parameter");
-    grouped_by(Symbol::Lt, param, Symbol::Comma, Symbol::Gt)
-        .or_not()
-        .map(Option::unwrap_or_default)
-        .labelled("type parameters")
+        .map_with(Spanned::from_map_extra)
 }
 
-fn func<'t, I>() -> impl Parser<'t, I, Spanned<Decl>, ParseError<'t>>
+fn constrs<'t, I>() -> impl Parser<'t, I, Vec<Spanned<Doc<Constr>>>, ParseError<'t>>
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
-    let param = id()
+    let constr = docstring()
+        .then(constr())
+        .map(|(doc, c)| c.map(|item| Doc { doc, item }))
+        .labelled("constraint");
+    grouped_by(Symbol::Lt, constr, Symbol::Comma, Symbol::Gt)
+        .or_not()
+        .map(Option::unwrap_or_default)
+        .labelled("constraints")
+}
+
+fn param<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Param>>, ParseError<'t>> + Clone
+where
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
+{
+    docstring()
+        .then(ident())
         .then(just(Token::Symbol(Symbol::Colon)).ignore_then(expr()))
-        .map(|(id, typ)| {
-            id.map(|name| Param {
-                name: Ident::Id(name),
-                typ,
-            })
+        .map(|((doc, name), typ)| Doc {
+            doc,
+            item: Param { name, typ },
         })
-        .labelled("parameter");
+        .map_with(Spanned::from_map_extra)
+}
+
+fn func<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
+{
+    let param = param().labelled("parameter");
 
     let params =
         grouped_by(Symbol::LParen, param, Symbol::Comma, Symbol::RParen).labelled("parameters");
 
     docstring()
         .then_ignore(just(Token::Keyword(Keyword::Fun)))
-        .then(id())
-        .then(type_params())
+        .then(ident())
+        .then(constrs())
         .then(params)
         .then(expr().or_not())
         .then(stmt().repeated().collect().delimited_by(
             just(Token::Symbol(Symbol::LBrace)),
             just(Token::Symbol(Symbol::RBrace)),
         ))
-        .map(|(((((doc, name), constrs), params), ret), body)| Decl {
+        .map(|(((((doc, name), constrs), params), ret), body)| Doc {
             doc,
-            sig: Sig::Func(FuncSig {
-                name,
-                constrs,
-                params,
-                ret,
-            }),
-            def: Def::Func { body },
+            item: Decl {
+                sig: Sig::Fun(Fun {
+                    name,
+                    constrs,
+                    params,
+                    ret,
+                }),
+                def: Def::Fun(body),
+            },
         })
         .map_with(Spanned::from_map_extra)
         .labelled("function definition")
 }
 
+fn r#struct<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
+{
+    let data = param()
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|p| p.map(|p| p.map(Member::Data)))
+        .labelled("data member");
+    let typ = docstring()
+        .then_ignore(just(Token::Keyword(Keyword::Typ)))
+        .then(constr())
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|(doc, c)| Doc {
+            doc,
+            item: Member::Type(c.item),
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("type member");
+    let optional = docstring()
+        .then(ident())
+        .then_ignore(just(Token::Symbol(Symbol::Question)))
+        .then(just(Token::Symbol(Symbol::Colon)).ignore_then(expr()))
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|((doc, name), typ)| Doc {
+            doc,
+            item: Param { name, typ },
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("optional data member");
+
+    docstring()
+        .then_ignore(just(Token::Keyword(Keyword::Struct)))
+        .then(ident())
+        .then(constrs())
+        .then(
+            choice((data, typ))
+                .repeated()
+                .collect()
+                .then(optional.or_not())
+                .delimited_by(
+                    just(Token::Symbol(Symbol::LBrace)),
+                    just(Token::Symbol(Symbol::RBrace)),
+                ),
+        )
+        .map(|(((doc, name), constrs), (items, optional))| Doc {
+            doc,
+            item: Decl {
+                sig: Sig::Struct {
+                    name,
+                    constrs,
+                    members: items,
+                    optional,
+                },
+                def: Def::Struct,
+            },
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("struct definition")
+}
+
 pub fn file<'t, I>() -> impl Parser<'t, I, File, ParseError<'t>>
 where
-    I: ValueInput<'t, Token = Token, Span = Span>,
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
-    func()
+    choice((func(), r#struct()))
         .repeated()
         .collect::<Vec<_>>()
-        .map(|decls| File { decls, main: None })
+        .map(|decls| File {
+            decls,
+            ..Default::default()
+        })
         .labelled("file")
 }
