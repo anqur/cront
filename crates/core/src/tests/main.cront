@@ -1,6 +1,6 @@
 typ Errno = CInt<I32>;
 
-fun main() CInt<I32> {
+fun main() Errno {
     let a = 42;
     println("{a}");
     return 0;

@@ -52,6 +52,7 @@ pub enum Symbol {
     EqEq,
     Le,
     Ge,
+    ColonColon,
 
     LParen,
     RParen,
@@ -151,6 +152,7 @@ pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
         just("==").to(Symbol::EqEq),
         just("<=").to(Symbol::Le),
         just(">=").to(Symbol::Ge),
+        just("::").to(Symbol::ColonColon),
         just('(').to(Symbol::LParen),
         just(')').to(Symbol::RParen),
         just('{').to(Symbol::LBrace),

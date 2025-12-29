@@ -106,6 +106,7 @@ enum Sig {
 
 #[derive(Debug)]
 struct Fun {
+    binder: Option<Span<Ident>>,
     name: Span<Ident>,
     constrs: Vec<Span<Doc<Constr>>>,
     params: Vec<Span<Doc<Param>>>,
@@ -578,6 +579,11 @@ where
 
     docstring()
         .then_ignore(just(Token::Keyword(Keyword::Fun)))
+        .then(
+            ident()
+                .then_ignore(just(Token::Symbol(Symbol::ColonColon)))
+                .or_not(),
+        )
         .then(ident())
         .then(constrs())
         .then(params)
@@ -586,18 +592,21 @@ where
             just(Token::Symbol(Symbol::LBrace)),
             just(Token::Symbol(Symbol::RBrace)),
         ))
-        .map(|(((((doc, name), constrs), params), ret), body)| Doc {
-            doc,
-            item: Decl {
-                sig: Sig::Fun(Fun {
-                    name,
-                    constrs,
-                    params,
-                    ret,
-                }),
-                def: Def::Fun(body),
+        .map(
+            |((((((doc, binder), name), constrs), params), ret), body)| Doc {
+                doc,
+                item: Decl {
+                    sig: Sig::Fun(Fun {
+                        binder,
+                        name,
+                        constrs,
+                        params,
+                        ret,
+                    }),
+                    def: Def::Fun(body),
+                },
             },
-        })
+        )
         .map_with(Span::from_map_extra)
         .labelled("function definition")
 }

@@ -14,3 +14,16 @@ struct Vector<
     /// Optional payload.
     data?: []Elem;
 }
+
+struct Data<T> {
+    a: T;
+}
+
+fun Data::init<T>(self: &Self<T>, a: T) {
+}
+
+typ Errno = CInt<I32>;
+
+fun main() Errno {
+    return 0;
+}
