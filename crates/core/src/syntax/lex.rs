@@ -1,5 +1,5 @@
 use crate::BuiltinType;
-use crate::syntax::{Spanned, SyntaxError};
+use crate::syntax::{Span, SyntaxError};
 use chumsky::Parser;
 use chumsky::container::Container;
 use chumsky::error::Rich;
@@ -17,7 +17,7 @@ pub struct Tokens {
     pub tokens: Vec<Token>,
 }
 
-impl Container<Spanned<Token>> for Tokens {
+impl Container<Span<Token>> for Tokens {
     fn with_capacity(n: usize) -> Self {
         Self {
             spans: Vec::with_capacity(n),
@@ -25,7 +25,7 @@ impl Container<Spanned<Token>> for Tokens {
         }
     }
 
-    fn push(&mut self, Spanned { span, item }: Spanned<Token>) {
+    fn push(&mut self, Span { span, item }: Span<Token>) {
         self.spans.push(span);
         self.tokens.push(item);
     }
@@ -69,6 +69,7 @@ pub enum Symbol {
     Plus,
     Minus,
     Mul,
+    And,
     Question,
 }
 
@@ -166,6 +167,7 @@ pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
         just('+').to(Symbol::Plus),
         just('-').to(Symbol::Minus),
         just('*').to(Symbol::Mul),
+        just('&').to(Symbol::And),
         just('?').to(Symbol::Question),
     ))
     .map(Token::Symbol);
@@ -187,7 +189,7 @@ pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
     let comment = choice((line_comment, block_comment));
 
     token
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .padded_by(comment.repeated())
         .padded()
         .recover_with(skip_then_retry_until(any().ignored(), end()))

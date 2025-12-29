@@ -1,0 +1,12 @@
+struct Data<T> {
+    a: T;
+}
+
+fun init<T>(self: &Data<T>, a: T) {
+}
+
+typ Errno = CInt<I32>;
+
+fun main() Errno {
+    return 0;
+}

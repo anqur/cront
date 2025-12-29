@@ -8,17 +8,17 @@ use chumsky::input::{Input, MapExtra};
 use chumsky::prelude::SimpleSpan;
 
 #[derive(Debug, Clone)]
-pub struct Spanned<T> {
+pub struct Span<T> {
     span: SimpleSpan,
     item: T,
 }
 
-impl<T> Spanned<T> {
-    fn map<F, U>(self, f: F) -> Spanned<U>
+impl<T> Span<T> {
+    fn map<F, U>(self, f: F) -> Span<U>
     where
         F: FnOnce(T) -> U,
     {
-        Spanned {
+        Span {
             span: self.span,
             item: f(self.item),
         }

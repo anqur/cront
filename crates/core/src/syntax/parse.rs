@@ -1,5 +1,5 @@
 use crate::syntax::lex::{Keyword, Symbol, Token};
-use crate::syntax::{Spanned, SyntaxError};
+use crate::syntax::{Span, SyntaxError};
 use crate::{BuiltinType, Float, Integer, Type};
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;
@@ -61,7 +61,7 @@ pub enum Ident {
 
 #[derive(Default, Debug)]
 pub struct File {
-    decls: Vec<Spanned<Doc<Decl>>>,
+    decls: Vec<Span<Doc<Decl>>>,
     main: Option<Id>,
 }
 
@@ -93,42 +93,42 @@ pub struct Decl {
 enum Sig {
     Fun(Fun),
     Typ {
-        name: Spanned<Ident>,
-        constrs: Vec<Spanned<Doc<Constr>>>,
+        name: Span<Ident>,
+        constrs: Vec<Span<Doc<Constr>>>,
     },
     Struct {
-        name: Spanned<Ident>,
-        constrs: Vec<Spanned<Doc<Constr>>>,
-        members: Vec<Spanned<Doc<Member>>>,
-        optional: Option<Spanned<Doc<Param>>>,
+        name: Span<Ident>,
+        constrs: Vec<Span<Doc<Constr>>>,
+        members: Vec<Span<Doc<Member>>>,
+        optional: Option<Span<Doc<Param>>>,
     },
 }
 
 #[derive(Debug)]
 struct Fun {
-    name: Spanned<Ident>,
-    constrs: Vec<Spanned<Doc<Constr>>>,
-    params: Vec<Spanned<Doc<Param>>>,
-    ret: Option<Spanned<Expr>>,
+    name: Span<Ident>,
+    constrs: Vec<Span<Doc<Constr>>>,
+    params: Vec<Span<Doc<Param>>>,
+    ret: Option<Span<Expr>>,
 }
 
 #[derive(Debug)]
 struct Param {
-    name: Spanned<Ident>,
-    typ: Spanned<Expr>,
+    name: Span<Ident>,
+    typ: Span<Expr>,
 }
 
 #[derive(Debug)]
 struct Constr {
-    typ: Spanned<Ident>,
-    constr: Spanned<Expr>,
-    default: Option<Spanned<Expr>>,
+    typ: Span<Ident>,
+    constr: Span<Expr>,
+    default: Option<Span<Expr>>,
 }
 
 #[derive(Debug)]
 enum Def {
-    Fun(Vec<Spanned<Stmt>>),
-    Typ(Spanned<Expr>),
+    Fun(Vec<Span<Stmt>>),
+    Typ(Span<Expr>),
     Struct,
 }
 
@@ -143,20 +143,20 @@ pub enum Stmt {
     Expr(Expr),
 
     Assign {
-        name: Spanned<Ident>,
-        typ: Option<Spanned<Expr>>,
-        rhs: Spanned<Expr>,
+        name: Span<Ident>,
+        typ: Option<Span<Expr>>,
+        rhs: Span<Expr>,
     },
     Update {
-        name: Spanned<Ident>,
-        rhs: Spanned<Expr>,
+        name: Span<Ident>,
+        rhs: Span<Expr>,
     },
 
-    Return(Option<Spanned<Expr>>),
+    Return(Option<Span<Expr>>),
     If {
-        then: Spanned<Branch>,
-        elif: Vec<Spanned<Branch>>,
-        els: Option<Spanned<Vec<Spanned<Self>>>>,
+        then: Span<Branch>,
+        elif: Vec<Span<Branch>>,
+        els: Option<Span<Vec<Span<Self>>>>,
     },
     While(Branch),
     Break,
@@ -165,8 +165,8 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub struct Branch {
-    pub cond: Spanned<Expr>,
-    pub body: Vec<Spanned<Stmt>>,
+    pub cond: Span<Expr>,
+    pub body: Vec<Span<Stmt>>,
 }
 
 #[derive(Debug, Clone)]
@@ -174,10 +174,11 @@ pub enum Expr {
     Ident(Ident),
 
     BuiltinType(BuiltinType),
-    Apply(Box<Spanned<Self>>, Vec<Spanned<Self>>),
+    Apply(Box<Span<Self>>, Vec<Span<Self>>),
+    RefType(Box<Span<Self>>),
     ArrayType {
-        elem: Box<Spanned<Self>>,
-        len: Option<Box<Spanned<Self>>>,
+        elem: Box<Span<Self>>,
+        len: Option<Box<Span<Self>>>,
     },
 
     Integer(Integer),
@@ -185,25 +186,25 @@ pub enum Expr {
     String(String),
     Boolean(bool),
 
-    Call(Box<Spanned<Self>>, Vec<Spanned<Self>>),
-    BinaryOp(Box<Spanned<Self>>, Symbol, Option<Type>, Box<Spanned<Self>>),
-    Object(Box<Spanned<Self>>, Object),
-    Access(Box<Spanned<Self>>, Access),
+    Call(Box<Span<Self>>, Vec<Span<Self>>),
+    BinaryOp(Box<Span<Self>>, Symbol, Option<Type>, Box<Span<Self>>),
+    Object(Box<Span<Self>>, Object),
+    Access(Box<Span<Self>>, Access),
     Method {
-        callee: Box<Spanned<Self>>,
+        callee: Box<Span<Self>>,
         target: Option<Id>,
-        method: Spanned<Ident>,
-        args: Vec<Spanned<Self>>,
+        method: Span<Ident>,
+        args: Vec<Span<Self>>,
     },
 }
 
 impl Expr {
     fn binary<'src, 'b, I, E>(
-        lhs: Spanned<Self>,
+        lhs: Span<Self>,
         op: Token,
-        rhs: Spanned<Self>,
+        rhs: Span<Self>,
         e: &mut MapExtra<'src, 'b, I, E>,
-    ) -> Spanned<Self>
+    ) -> Span<Self>
     where
         I: Input<'src, Span = SimpleSpan>,
         E: ParserExtra<'src, I>,
@@ -211,28 +212,28 @@ impl Expr {
         let Token::Symbol(sym) = op else {
             unreachable!()
         };
-        Spanned::from_map_extra(Self::BinaryOp(Box::new(lhs), sym, None, Box::new(rhs)), e)
+        Span::from_map_extra(Self::BinaryOp(Box::new(lhs), sym, None, Box::new(rhs)), e)
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Object {
-    Unordered(Vec<(Spanned<Ustr>, Spanned<Expr>)>),
+    Unordered(Vec<(Span<Ustr>, Span<Expr>)>),
     Ordered(Vec<Expr>),
 }
 
 #[derive(Debug, Clone)]
 pub enum Access {
-    Named(Spanned<Ustr>),
+    Named(Span<Ustr>),
     Indexed(usize),
 }
 
 enum Chainer {
-    Args(Vec<Spanned<Expr>>),
-    Initialize(Vec<(Spanned<Ustr>, Spanned<Expr>)>),
-    Access(Spanned<Ustr>),
-    Method(Spanned<Ident>, Vec<Spanned<Expr>>),
-    TypeArgs(Vec<Spanned<Expr>>),
+    Args(Vec<Span<Expr>>),
+    Initialize(Vec<(Span<Ustr>, Span<Expr>)>),
+    Access(Span<Ustr>),
+    Method(Span<Ident>, Vec<Span<Expr>>),
+    TypeArgs(Vec<Span<Expr>>),
 }
 
 type ParseError<'a> = SyntaxError<'a, Token>;
@@ -269,7 +270,7 @@ where
         .delimited_by(just(Token::Symbol(lhs)), just(Token::Symbol(rhs)))
 }
 
-fn name<'t, I>() -> impl Parser<'t, I, Spanned<Ustr>, ParseError<'t>> + Clone
+fn name<'t, I>() -> impl Parser<'t, I, Span<Ustr>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -277,18 +278,18 @@ where
         Token::Ident(n) => Some(n),
         _ => None,
     })
-    .map_with(Spanned::from_map_extra)
+    .map_with(Span::from_map_extra)
     .labelled("name")
 }
 
-fn ident<'t, I>() -> impl Parser<'t, I, Spanned<Ident>, ParseError<'t>> + Clone
+fn ident<'t, I>() -> impl Parser<'t, I, Span<Ident>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
     name().map(|n| n.map(|n| Ident::Id(Id::bound(n))))
 }
 
-pub fn expr<'t, I>() -> impl Parser<'t, I, Spanned<Expr>, ParseError<'t>> + Clone
+pub fn expr<'t, I>() -> impl Parser<'t, I, Span<Expr>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -306,7 +307,7 @@ where
             _ => return None,
         })
     })
-    .map_with(Spanned::from_map_extra)
+    .map_with(Span::from_map_extra)
     .labelled("constant expression");
 
     let i = ident()
@@ -345,7 +346,7 @@ where
         let chainer = choice((arguments, obj, method, access, type_args));
 
         let call = choice((constant, i))
-            .foldl_with(chainer.repeated(), |a, c, e| Spanned {
+            .foldl_with(chainer.repeated(), |a, c, e| Span {
                 span: e.span(),
                 item: match c {
                     Chainer::Args(args) => Expr::Call(Box::new(a), args),
@@ -370,7 +371,7 @@ where
                     just(Token::Symbol(Symbol::RBracket)),
                 ),
                 |len: Option<_>, elem, e| {
-                    Spanned::from_map_extra(
+                    Span::from_map_extra(
                         Expr::ArrayType {
                             elem: Box::new(elem),
                             len: len.map(Box::new),
@@ -379,6 +380,9 @@ where
                     )
                 },
             ),
+            prefix(4, just(Token::Symbol(Symbol::And)), |_, t, e| {
+                Span::from_map_extra(Expr::RefType(Box::new(t)), e)
+            }),
             infix(left(3), just(Token::Symbol(Symbol::Mul)), Expr::binary),
             infix(left(2), just(Token::Symbol(Symbol::Plus)), Expr::binary),
             infix(left(2), just(Token::Symbol(Symbol::Minus)), Expr::binary),
@@ -392,7 +396,7 @@ where
     })
 }
 
-pub fn stmt<'t, I>() -> impl Parser<'t, I, Spanned<Stmt>, ParseError<'t>>
+pub fn stmt<'t, I>() -> impl Parser<'t, I, Span<Stmt>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -407,7 +411,7 @@ where
         .then(expr())
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
         .map(|((name, typ), rhs)| Stmt::Assign { name, typ, rhs })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("assignment statement");
 
     let update = ident()
@@ -415,26 +419,26 @@ where
         .then(expr())
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
         .map(|(name, rhs)| Stmt::Update { name, rhs })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("update statement");
 
     let r#break = just(Token::Keyword(Keyword::Break))
         .then(just(Token::Symbol(Symbol::Semi)))
         .map(|_| Stmt::Break)
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("break statement");
 
     let r#continue = just(Token::Keyword(Keyword::Continue))
         .then(just(Token::Symbol(Symbol::Semi)))
         .map(|_| Stmt::Continue)
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("continue statement");
 
     let r#return = just(Token::Keyword(Keyword::Return))
         .ignore_then(expr().or_not())
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
         .map(Stmt::Return)
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("return statement");
 
     let cmd = expr()
@@ -456,7 +460,7 @@ where
                 just(Token::Symbol(Symbol::LBrace)),
                 just(Token::Symbol(Symbol::RBrace)),
             ))
-            .map(|((span, cond), body)| Spanned {
+            .map(|((span, cond), body)| Span {
                 span,
                 item: Branch { cond, body },
             })
@@ -477,11 +481,11 @@ where
                         just(Token::Symbol(Symbol::LBrace)),
                         just(Token::Symbol(Symbol::RBrace)),
                     ))
-                    .map(|(span, item)| Spanned { span, item })
+                    .map(|(span, item)| Span { span, item })
                     .or_not(),
             )
             .map(|((then, elif), els)| Stmt::If { then, elif, els })
-            .map_with(Spanned::from_map_extra)
+            .map_with(Span::from_map_extra)
             .labelled("if statement");
 
         let r#while = cond(Keyword::While)
@@ -490,7 +494,7 @@ where
                 just(Token::Symbol(Symbol::RBrace)),
             ))
             .map(|((.., cond), body)| Stmt::While(Branch { cond, body }))
-            .map_with(Spanned::from_map_extra)
+            .map_with(Span::from_map_extra)
             .labelled("while statement");
 
         choice((
@@ -513,7 +517,7 @@ where
     .labelled("docstring")
 }
 
-fn constr<'t, I>() -> impl Parser<'t, I, Spanned<Constr>, ParseError<'t>> + Clone
+fn constr<'t, I>() -> impl Parser<'t, I, Span<Constr>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -525,17 +529,17 @@ where
         )
         .then(just(Token::Symbol(Symbol::Eq)).ignore_then(expr()).or_not())
         .map(|((typ, constr), default)| Constr {
-            constr: constr.unwrap_or(Spanned {
+            constr: constr.unwrap_or(Span {
                 span: typ.span,
                 item: Expr::BuiltinType(BuiltinType::Type),
             }),
             typ,
             default,
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
 }
 
-fn constrs<'t, I>() -> impl Parser<'t, I, Vec<Spanned<Doc<Constr>>>, ParseError<'t>>
+fn constrs<'t, I>() -> impl Parser<'t, I, Vec<Span<Doc<Constr>>>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -549,7 +553,7 @@ where
         .labelled("constraints")
 }
 
-fn param<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Param>>, ParseError<'t>> + Clone
+fn param<'t, I>() -> impl Parser<'t, I, Span<Doc<Param>>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -560,10 +564,10 @@ where
             doc,
             item: Param { name, typ },
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
 }
 
-fn func<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
+fn func<'t, I>() -> impl Parser<'t, I, Span<Doc<Decl>>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -594,11 +598,11 @@ where
                 def: Def::Fun(body),
             },
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("function definition")
 }
 
-fn typ<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
+fn typ<'t, I>() -> impl Parser<'t, I, Span<Doc<Decl>>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -616,11 +620,11 @@ where
                 def: Def::Typ(typ),
             },
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("type alias definition")
 }
 
-fn r#struct<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
+fn r#struct<'t, I>() -> impl Parser<'t, I, Span<Doc<Decl>>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -636,7 +640,7 @@ where
             doc,
             item: Member::Type(c.item),
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("type member");
     let optional = docstring()
         .then(ident())
@@ -647,7 +651,7 @@ where
             doc,
             item: Param { name, typ },
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("optional data member");
 
     docstring()
@@ -676,7 +680,7 @@ where
                 def: Def::Struct,
             },
         })
-        .map_with(Spanned::from_map_extra)
+        .map_with(Span::from_map_extra)
         .labelled("struct definition")
 }
 
