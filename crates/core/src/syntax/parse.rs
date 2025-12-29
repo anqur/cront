@@ -92,6 +92,10 @@ pub struct Decl {
 #[derive(Debug)]
 enum Sig {
     Fun(Fun),
+    Typ {
+        name: Spanned<Ident>,
+        constrs: Vec<Spanned<Doc<Constr>>>,
+    },
     Struct {
         name: Spanned<Ident>,
         constrs: Vec<Spanned<Doc<Constr>>>,
@@ -124,6 +128,7 @@ struct Constr {
 #[derive(Debug)]
 enum Def {
     Fun(Vec<Spanned<Stmt>>),
+    Typ(Spanned<Expr>),
     Struct,
 }
 
@@ -593,6 +598,28 @@ where
         .labelled("function definition")
 }
 
+fn typ<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
+where
+    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
+{
+    docstring()
+        .then_ignore(just(Token::Keyword(Keyword::Typ)))
+        .then(ident())
+        .then(constrs())
+        .then_ignore(just(Token::Symbol(Symbol::Eq)))
+        .then(expr())
+        .then_ignore(just(Token::Symbol(Symbol::Semi)))
+        .map(|(((doc, name), constrs), typ)| Doc {
+            doc,
+            item: Decl {
+                sig: Sig::Typ { name, constrs },
+                def: Def::Typ(typ),
+            },
+        })
+        .map_with(Spanned::from_map_extra)
+        .labelled("type alias definition")
+}
+
 fn r#struct<'t, I>() -> impl Parser<'t, I, Spanned<Doc<Decl>>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
@@ -657,7 +684,7 @@ pub fn file<'t, I>() -> impl Parser<'t, I, File, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
-    choice((func(), r#struct()))
+    choice((func(), typ(), r#struct()))
         .repeated()
         .collect::<Vec<_>>()
         .map(|decls| File {

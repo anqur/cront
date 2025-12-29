@@ -1,3 +1,5 @@
+typ Errno = CInt<I32>;
+
 fun main() CInt<I32> {
     let a = 42;
     println("{a}");
