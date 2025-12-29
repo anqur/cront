@@ -1,3 +1,4 @@
+mod build;
 mod syntax;
 #[cfg(test)]
 mod tests;
@@ -6,6 +7,7 @@ pub use crate::syntax::lex::lex;
 pub use crate::syntax::parse::expr;
 pub use crate::syntax::parse::file;
 pub use crate::syntax::parse::stmt;
+pub use build::build;
 use strum::{Display, EnumString};
 
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq, EnumString, Display)]
