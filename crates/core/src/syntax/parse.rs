@@ -445,7 +445,7 @@ where
     let cmd = expr()
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
         .map(|e| e.map(Stmt::Expr))
-        .labelled("expression statement");
+        .labelled("command statement");
 
     let cond = |kw| {
         just(Token::Keyword(kw))

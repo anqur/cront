@@ -1,0 +1,8 @@
+fun factorial(n: U32) U32 {
+    let a: U32 = 1;
+    while n > 1 {
+        a = a * n;
+        n = n - 1;
+    }
+    return a;
+}
