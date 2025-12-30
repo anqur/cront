@@ -1,14 +1,41 @@
 mod build;
+mod semantic;
 mod syntax;
 #[cfg(test)]
 mod tests;
 
+pub use crate::semantic::resolve::resolve;
 pub use crate::syntax::lex::lex;
 pub use crate::syntax::parse::expr;
 pub use crate::syntax::parse::file;
 pub use crate::syntax::parse::stmt;
 pub use build::build;
+use chumsky::prelude::SimpleSpan;
+use std::result::Result as StdResult;
 use strum::{Display, EnumString};
+use ustr::Ustr;
+
+#[derive(Debug, Clone)]
+pub struct Span<T> {
+    span: SimpleSpan,
+    item: T,
+}
+
+impl<T> Span<T> {
+    pub fn new(span: SimpleSpan, item: T) -> Self {
+        Span { span, item }
+    }
+
+    pub(crate) fn map<F, U>(self, f: F) -> Span<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        Span {
+            span: self.span,
+            item: f(self.item),
+        }
+    }
+}
 
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq, EnumString, Display)]
 pub enum BuiltinType {
@@ -52,4 +79,17 @@ pub enum Float {
 pub enum Type {
     #[strum(transparent)]
     Builtin(BuiltinType),
+}
+
+type Result<T> = StdResult<T, Error>;
+
+#[derive(Debug)]
+pub enum Error {
+    Resolve(Vec<Span<ResolveErr>>),
+}
+
+#[derive(Debug)]
+pub enum ResolveErr {
+    UndefName(Ustr),
+    DuplicateName(Ustr),
 }

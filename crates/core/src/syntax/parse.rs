@@ -10,65 +10,70 @@ use chumsky::primitive::select;
 use serde_json::from_str;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::hash::{Hash, Hasher};
-use std::rc::Rc;
-use strum::Display;
 use ustr::Ustr;
 
-#[derive(Clone, Eq)]
-pub struct Id(Rc<Ustr>);
+#[derive(Copy, Clone, Eq)]
+pub struct Ident {
+    pub(crate) text: Ustr,
+    pub(crate) id: u64,
+}
 
-impl Id {
-    fn bound(n: Ustr) -> Self {
-        Self(Rc::new(n))
+impl Ident {
+    fn unbound(text: Ustr) -> Self {
+        Self {
+            text,
+            id: Default::default(),
+        }
     }
 
-    fn id(&self) -> usize {
-        Rc::as_ptr(&self.0) as _
+    pub(crate) fn fresh(&mut self, id: u64) {
+        self.id = id
     }
 }
 
-impl Display for Id {
+impl Display for Ident {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.text)
     }
 }
 
-impl Debug for Id {
+impl Debug for Ident {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        write!(f, "{}@{}", self.0, self.id())
+        write!(f, "{}@{}", self.text, self.id)
     }
 }
 
-impl PartialEq for Id {
+impl PartialEq for Ident {
     fn eq(&self, other: &Self) -> bool {
-        self.id() == other.id()
+        self.id == other.id
     }
 }
 
-impl Hash for Id {
+impl Hash for Ident {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id().hash(state);
+        self.id.hash(state);
     }
-}
-
-#[derive(Debug, Clone, Display)]
-pub enum Ident {
-    #[strum(transparent)]
-    Id(Id),
-    #[strum(to_string = "_{0}")]
-    Idx(usize),
 }
 
 #[derive(Default, Debug)]
 pub struct File {
-    decls: Vec<Span<Doc<Decl>>>,
-    main: Option<Id>,
+    pub(crate) decls: Vec<Span<Doc<Decl>>>,
 }
 
 #[derive(Debug)]
-struct Doc<T> {
-    doc: Vec<String>,
-    item: T,
+pub(crate) struct Doc<T> {
+    pub(crate) doc: Vec<String>,
+    pub(crate) item: T,
+}
+
+impl<T> Span<Doc<T>> {
+    pub(crate) fn inner(&self) -> &T {
+        &self.item.item
+    }
+
+    pub(crate) fn inner_mut(&mut self) -> &mut T {
+        &mut self.item.item
+    }
 }
 
 impl<T> Doc<T> {
@@ -85,57 +90,64 @@ impl<T> Doc<T> {
 
 #[derive(Debug)]
 pub struct Decl {
-    sig: Sig,
-    def: Def,
+    pub(crate) sig: Sig,
+    pub(crate) def: Def,
 }
 
 #[derive(Debug)]
-enum Sig {
+pub(crate) enum Sig {
     Fun(Fun),
     Typ {
         name: Span<Ident>,
         constrs: Vec<Span<Doc<Constr>>>,
     },
     Struct {
+        #[allow(dead_code)]
         name: Span<Ident>,
+        #[allow(dead_code)]
         constrs: Vec<Span<Doc<Constr>>>,
+        #[allow(dead_code)]
         members: Vec<Span<Doc<Member>>>,
+        #[allow(dead_code)]
         optional: Option<Span<Doc<Param>>>,
     },
 }
 
 #[derive(Debug)]
-struct Fun {
-    binder: Option<Span<Ident>>,
-    name: Span<Ident>,
-    constrs: Vec<Span<Doc<Constr>>>,
-    params: Vec<Span<Doc<Param>>>,
-    ret: Option<Span<Expr>>,
+pub(crate) struct Fun {
+    #[allow(dead_code)]
+    pub(crate) binder: Option<Span<Ident>>,
+    pub(crate) name: Span<Ident>,
+    pub(crate) constrs: Vec<Span<Doc<Constr>>>,
+    pub(crate) params: Vec<Span<Doc<Param>>>,
+    pub(crate) ret: Option<Span<Expr>>,
 }
 
 #[derive(Debug)]
-struct Param {
-    name: Span<Ident>,
-    typ: Span<Expr>,
+pub(crate) struct Param {
+    pub(crate) name: Span<Ident>,
+    pub(crate) typ: Span<Expr>,
 }
 
 #[derive(Debug)]
-struct Constr {
-    typ: Span<Ident>,
-    constr: Span<Expr>,
-    default: Option<Span<Expr>>,
+pub(crate) struct Constr {
+    pub(crate) typ: Span<Ident>,
+    pub(crate) constr: Span<Expr>,
+    pub(crate) default: Option<Span<Expr>>,
 }
 
 #[derive(Debug)]
-enum Def {
+pub(crate) enum Def {
     Fun(Vec<Span<Stmt>>),
     Typ(Span<Expr>),
     Struct,
 }
 
 #[derive(Debug)]
-enum Member {
+pub(crate) enum Member {
+    #[allow(dead_code)]
     Data(Param),
+    #[allow(dead_code)]
     Type(Constr),
 }
 
@@ -189,11 +201,11 @@ pub enum Expr {
 
     Call(Box<Span<Self>>, Vec<Span<Self>>),
     BinaryOp(Box<Span<Self>>, Symbol, Option<Type>, Box<Span<Self>>),
-    Object(Box<Span<Self>>, Object),
-    Access(Box<Span<Self>>, Access),
+    Object(Box<Span<Self>>, Vec<(Span<Ustr>, Span<Expr>)>),
+    Access(Box<Span<Self>>, Span<Ustr>),
     Method {
         callee: Box<Span<Self>>,
-        target: Option<Id>,
+        target: Option<Ident>,
         method: Span<Ident>,
         args: Vec<Span<Self>>,
     },
@@ -215,18 +227,6 @@ impl Expr {
         };
         Span::from_map_extra(Self::BinaryOp(Box::new(lhs), sym, None, Box::new(rhs)), e)
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Object {
-    Unordered(Vec<(Span<Ustr>, Span<Expr>)>),
-    Ordered(Vec<Expr>),
-}
-
-#[derive(Debug, Clone)]
-pub enum Access {
-    Named(Span<Ustr>),
-    Indexed(usize),
 }
 
 enum Chainer {
@@ -256,21 +256,6 @@ where
         .delimited_by(just(Token::Symbol(lhs)), just(Token::Symbol(rhs)))
 }
 
-fn grouped_with<'t, I, O, P>(
-    lhs: Symbol,
-    parser: P,
-    rhs: Symbol,
-) -> impl Parser<'t, I, Vec<O>, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-    P: Parser<'t, I, O, ParseError<'t>>,
-{
-    parser
-        .repeated()
-        .collect()
-        .delimited_by(just(Token::Symbol(lhs)), just(Token::Symbol(rhs)))
-}
-
 fn name<'t, I>() -> impl Parser<'t, I, Span<Ustr>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
@@ -287,7 +272,7 @@ fn ident<'t, I>() -> impl Parser<'t, I, Span<Ident>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
-    name().map(|n| n.map(|n| Ident::Id(Id::bound(n))))
+    name().map(|n| n.map(Ident::unbound))
 }
 
 pub fn expr<'t, I>() -> impl Parser<'t, I, Span<Expr>, ParseError<'t>> + Clone
@@ -351,8 +336,8 @@ where
                 span: e.span(),
                 item: match c {
                     Chainer::Args(args) => Expr::Call(Box::new(a), args),
-                    Chainer::Initialize(xs) => Expr::Object(Box::new(a), Object::Unordered(xs)),
-                    Chainer::Access(m) => Expr::Access(Box::new(a), Access::Named(m)),
+                    Chainer::Initialize(xs) => Expr::Object(Box::new(a), xs),
+                    Chainer::Access(m) => Expr::Access(Box::new(a), m),
                     Chainer::Method(method, args) => Expr::Method {
                         callee: Box::new(a),
                         target: None,
@@ -700,9 +685,6 @@ where
     choice((func(), typ(), r#struct()))
         .repeated()
         .collect::<Vec<_>>()
-        .map(|decls| File {
-            decls,
-            ..Default::default()
-        })
+        .map(|decls| File { decls })
         .labelled("file")
 }
