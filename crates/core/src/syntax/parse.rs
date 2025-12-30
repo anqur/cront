@@ -115,7 +115,6 @@ pub(crate) enum Sig {
 
 #[derive(Debug)]
 pub(crate) struct Fun {
-    #[allow(dead_code)]
     pub(crate) binder: Option<Span<Ident>>,
     pub(crate) name: Span<Ident>,
     pub(crate) constrs: Vec<Span<Doc<Constr>>>,

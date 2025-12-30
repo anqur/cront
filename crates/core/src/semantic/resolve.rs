@@ -73,6 +73,9 @@ impl Resolver {
     }
 
     fn fun(&mut self, fun: &mut Fun) {
+        if let Some(binder) = &mut fun.binder {
+            self.name(binder.span, &mut binder.item);
+        }
         self.fresh(&mut fun.name);
         self.constrs(&mut fun.constrs);
         self.with_constrs(&fun.constrs, |s| {
