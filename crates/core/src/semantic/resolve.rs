@@ -135,10 +135,7 @@ impl Resolver {
             .cloned()
         {
             Some(found) => name.id = found,
-            None => self.errs.push(Span {
-                span,
-                item: ResolveErr::UndefName(raw),
-            }),
+            None => self.errs.push(Span::new(span, ResolveErr::UndefName(raw))),
         }
     }
 

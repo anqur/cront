@@ -58,6 +58,7 @@ impl Hash for Ident {
 #[derive(Default, Debug)]
 pub struct File {
     pub(crate) decls: Vec<Span<Doc<Decl>>>,
+    pub(crate) main: Option<Ident>,
 }
 
 #[derive(Debug)]
@@ -331,20 +332,22 @@ where
         let chainer = choice((arguments, obj, method, access, type_args));
 
         let call = choice((constant, i))
-            .foldl_with(chainer.repeated(), |a, c, e| Span {
-                span: e.span(),
-                item: match c {
-                    Chainer::Args(args) => Expr::Call(Box::new(a), args),
-                    Chainer::Initialize(xs) => Expr::Object(Box::new(a), xs),
-                    Chainer::Access(m) => Expr::Access(Box::new(a), m),
-                    Chainer::Method(method, args) => Expr::Method {
-                        callee: Box::new(a),
-                        target: None,
-                        method,
-                        args,
+            .foldl_with(chainer.repeated(), |a, c, e| {
+                Span::new(
+                    e.span(),
+                    match c {
+                        Chainer::Args(args) => Expr::Call(Box::new(a), args),
+                        Chainer::Initialize(xs) => Expr::Object(Box::new(a), xs),
+                        Chainer::Access(m) => Expr::Access(Box::new(a), m),
+                        Chainer::Method(method, args) => Expr::Method {
+                            callee: Box::new(a),
+                            target: None,
+                            method,
+                            args,
+                        },
+                        Chainer::TypeArgs(args) => Expr::Apply(Box::new(a), args),
                     },
-                    Chainer::TypeArgs(args) => Expr::Apply(Box::new(a), args),
-                },
+                )
             })
             .labelled("call expression");
 
@@ -445,10 +448,7 @@ where
                 just(Token::Symbol(Symbol::LBrace)),
                 just(Token::Symbol(Symbol::RBrace)),
             ))
-            .map(|((span, cond), body)| Span {
-                span,
-                item: Branch { cond, body },
-            })
+            .map(|((span, cond), body)| Span::new(span, Branch { cond, body }))
             .labelled("if branch");
 
         let r#if = branch
@@ -466,7 +466,7 @@ where
                         just(Token::Symbol(Symbol::LBrace)),
                         just(Token::Symbol(Symbol::RBrace)),
                     ))
-                    .map(|(span, item)| Span { span, item })
+                    .map(|(span, item)| Span::new(span, item))
                     .or_not(),
             )
             .map(|((then, elif), els)| Stmt::If { then, elif, els })
@@ -514,10 +514,7 @@ where
         )
         .then(just(Token::Symbol(Symbol::Eq)).ignore_then(expr()).or_not())
         .map(|((typ, constr), default)| Constr {
-            constr: constr.unwrap_or(Span {
-                span: typ.span,
-                item: Expr::BuiltinType(BuiltinType::Type),
-            }),
+            constr: constr.unwrap_or(Span::new(typ.span, Expr::BuiltinType(BuiltinType::Type))),
             typ,
             default,
         })
@@ -684,6 +681,9 @@ where
     choice((func(), typ(), r#struct()))
         .repeated()
         .collect::<Vec<_>>()
-        .map(|decls| File { decls })
+        .map(|decls| File {
+            decls,
+            main: Default::default(),
+        })
         .labelled("file")
 }
