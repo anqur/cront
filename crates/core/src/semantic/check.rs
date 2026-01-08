@@ -306,7 +306,12 @@ impl Checker {
         })
     }
 
-    fn check_number(&mut self, lhs: &mut Span<Expr>, rhs: &mut Span<Expr>) -> Type {
+    fn check_number(
+        &mut self,
+        lhs: &mut Span<Expr>,
+        rhs: &mut Span<Expr>,
+        typ: &mut Option<Box<Span<Expr>>>,
+    ) -> Type {
         let got = self.infer(lhs.span, &mut lhs.item).rhs;
         if let Type::Builtin(t) = got
             && (t.is_integer() || t.is_float())
@@ -318,6 +323,7 @@ impl Checker {
                 want: "number".to_string(),
             }));
         }
+        *typ = Some(Box::new(got.to_expr(lhs.span)));
         got
     }
 
@@ -392,17 +398,17 @@ impl Checker {
                     got
                 }
             },
-            Expr::BinaryOp(lhs, op, rhs) => match op {
+            Expr::BinaryOp(lhs, op, typ, rhs) => match op {
                 Symbol::EqEq => {
                     let got = self.infer(lhs.span, &mut lhs.item).rhs;
                     self.check(rhs.span, &mut rhs.item, &got);
                     Type::Builtin(BuiltinType::Bool)
                 }
                 Symbol::Lt | Symbol::Gt | Symbol::Le | Symbol::Ge => {
-                    self.check_number(lhs, rhs);
+                    self.check_number(lhs, rhs, typ);
                     Type::Builtin(BuiltinType::Bool)
                 }
-                Symbol::Plus | Symbol::Minus | Symbol::Mul => self.check_number(lhs, rhs),
+                Symbol::Plus | Symbol::Minus | Symbol::Mul => self.check_number(lhs, rhs, typ),
                 _ => unreachable!(),
             },
             Expr::Object(..) => todo!(),
@@ -455,6 +461,12 @@ pub(crate) struct FunItem {
     pub(crate) params: Vec<(Ident, Type)>,
     pub(crate) ret: Type,
     pub(crate) body: Vec<Span<Stmt>>,
+}
+
+impl Span<FunItem> {
+    pub(crate) fn is_concrete(&self) -> bool {
+        self.item.constrs.is_empty()
+    }
 }
 
 struct Block {
