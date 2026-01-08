@@ -1,6 +1,6 @@
 use crate::syntax::lex::{Keyword, Symbol, Token};
 use crate::syntax::{Span, SyntaxError};
-use crate::{BuiltinType, Float, Integer, Type};
+use crate::{BuiltinType, Float, Integer};
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;
 use chumsky::input::{MapExtra, ValueInput};
@@ -200,7 +200,7 @@ pub enum Expr {
     Boolean(bool),
 
     Call(Box<Span<Self>>, Vec<Span<Self>>),
-    BinaryOp(Box<Span<Self>>, Symbol, Option<Type>, Box<Span<Self>>),
+    BinaryOp(Box<Span<Self>>, Symbol, Box<Span<Self>>),
     Object(Box<Span<Self>>, Vec<(Span<Ustr>, Span<Expr>)>),
     Access(Box<Span<Self>>, Span<Ustr>),
     Method {
@@ -225,7 +225,7 @@ impl Expr {
         let Token::Symbol(sym) = op else {
             unreachable!()
         };
-        Span::from_map_extra(Self::BinaryOp(Box::new(lhs), sym, None, Box::new(rhs)), e)
+        Span::from_map_extra(Self::BinaryOp(Box::new(lhs), sym, Box::new(rhs)), e)
     }
 }
 

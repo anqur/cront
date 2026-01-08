@@ -7,6 +7,7 @@ use chumsky::prelude::{
     IterParser, SimpleSpan, any, choice, end, just, none_of, one_of, skip_then_retry_until,
 };
 use chumsky::text::{digits, ident, int};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use ustr::Ustr;
@@ -47,7 +48,7 @@ pub enum Keyword {
     Typ,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Display)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Symbol {
     EqEq,
     Le,
@@ -72,6 +73,36 @@ pub enum Symbol {
     Mul,
     And,
     Question,
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let s = match self {
+            Self::EqEq => "==",
+            Self::Le => "<=",
+            Self::Ge => ">=",
+            Self::ColonColon => "::",
+            Self::LParen => "(",
+            Self::RParen => ")",
+            Self::LBrace => "{",
+            Self::RBrace => "}",
+            Self::LBracket => "[",
+            Self::RBracket => "]",
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Semi => ";",
+            Self::Colon => ":",
+            Self::Comma => ",",
+            Self::Dot => ".",
+            Self::Eq => "=",
+            Self::Plus => "+",
+            Self::Minus => "-",
+            Self::Mul => "*",
+            Self::And => "&",
+            Self::Question => "?",
+        };
+        f.write_str(s)
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Display)]

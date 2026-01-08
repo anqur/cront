@@ -5,6 +5,7 @@ mod syntax;
 mod tests;
 
 pub use crate::semantic::check::check;
+pub use crate::semantic::codegen::generate;
 pub use crate::semantic::resolve::resolve;
 pub use crate::syntax::lex::lex;
 pub use crate::syntax::parse::expr;
@@ -123,22 +124,33 @@ impl BuiltinType {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Display)]
 pub enum Integer {
+    #[strum(transparent)]
     I8(i8),
+    #[strum(transparent)]
     I16(i16),
+    #[strum(transparent)]
     I32(i32),
+    #[strum(transparent)]
     I64(i64),
+    #[strum(transparent)]
     U8(u8),
+    #[strum(transparent)]
     U16(u16),
+    #[strum(transparent)]
     U32(u32),
+    #[strum(transparent)]
     USize(usize),
+    #[strum(transparent)]
     U64(u64),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Display)]
 pub enum Float {
+    #[strum(transparent)]
     F32(f32),
+    #[strum(transparent)]
     F64(f64),
 }
 

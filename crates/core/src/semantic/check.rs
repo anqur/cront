@@ -11,7 +11,7 @@ pub fn check(file: &mut File) -> Result<Items> {
 
 #[derive(Default)]
 pub struct Items {
-    fns: Vec<Span<FunItem>>,
+    pub(crate) fns: Vec<Span<FunItem>>,
 }
 
 #[derive(Clone)]
@@ -226,10 +226,12 @@ impl Checker {
                 None => {
                     let got = Type::Builtin(BuiltinType::Void);
                     self.isa(stmt.span, &got, &block.ret);
+                    // FIXME: should be a placeholder.
                     got
                 }
                 Some(e) => {
                     self.check(e.span, &mut e.item, &block.ret);
+                    // FIXME: should be a placeholder.
                     block.ret.clone()
                 }
             },
@@ -304,6 +306,21 @@ impl Checker {
         })
     }
 
+    fn check_number(&mut self, lhs: &mut Span<Expr>, rhs: &mut Span<Expr>) -> Type {
+        let got = self.infer(lhs.span, &mut lhs.item).rhs;
+        if let Type::Builtin(t) = got
+            && (t.is_integer() || t.is_float())
+        {
+            self.check(rhs.span, &mut rhs.item, &got);
+        } else {
+            self.errs.push(lhs.with(CheckErr::TypeMismatch {
+                got: got.to_string(),
+                want: "number".to_string(),
+            }));
+        }
+        got
+    }
+
     fn infer(&mut self, span: SimpleSpan, expr: &mut Expr) -> Inferred {
         Inferred::value(match expr {
             Expr::Ident(ident) => return self.ident(ident),
@@ -375,45 +392,17 @@ impl Checker {
                     got
                 }
             },
-            Expr::BinaryOp(lhs, op, typ, rhs) => match op {
+            Expr::BinaryOp(lhs, op, rhs) => match op {
                 Symbol::EqEq => {
                     let got = self.infer(lhs.span, &mut lhs.item).rhs;
                     self.check(rhs.span, &mut rhs.item, &got);
-                    *typ = Some(got);
                     Type::Builtin(BuiltinType::Bool)
                 }
                 Symbol::Lt | Symbol::Gt | Symbol::Le | Symbol::Ge => {
-                    let got = self.infer(lhs.span, &mut lhs.item).rhs;
-                    if let Type::Builtin(t) = got
-                        && (t.is_integer() || t.is_float())
-                    {
-                        self.check(rhs.span, &mut rhs.item, &got);
-                        *typ = Some(got);
-                        Type::Builtin(BuiltinType::Bool)
-                    } else {
-                        self.errs.push(lhs.with(CheckErr::TypeMismatch {
-                            got: got.to_string(),
-                            want: "number".to_string(),
-                        }));
-                        got
-                    }
+                    self.check_number(lhs, rhs);
+                    Type::Builtin(BuiltinType::Bool)
                 }
-                Symbol::Plus | Symbol::Minus | Symbol::Mul => {
-                    let got = self.infer(lhs.span, &mut lhs.item).rhs;
-                    if let Type::Builtin(t) = got
-                        && (t.is_integer() || t.is_float())
-                    {
-                        self.check(rhs.span, &mut rhs.item, &got);
-                        *typ = Some(got.clone());
-                        got
-                    } else {
-                        self.errs.push(lhs.with(CheckErr::TypeMismatch {
-                            got: got.to_string(),
-                            want: "number".to_string(),
-                        }));
-                        got
-                    }
-                }
+                Symbol::Plus | Symbol::Minus | Symbol::Mul => self.check_number(lhs, rhs),
                 _ => unreachable!(),
             },
             Expr::Object(..) => todo!(),
@@ -460,13 +449,12 @@ impl Checker {
     }
 }
 
-struct FunItem {
-    #[allow(dead_code)]
-    name: Ident,
-    constrs: Vec<(Ident, Type)>,
-    params: Vec<(Ident, Type)>,
-    ret: Type,
-    body: Vec<Span<Stmt>>,
+pub(crate) struct FunItem {
+    pub(crate) name: Ident,
+    pub(crate) constrs: Vec<(Ident, Type)>,
+    pub(crate) params: Vec<(Ident, Type)>,
+    pub(crate) ret: Type,
+    pub(crate) body: Vec<Span<Stmt>>,
 }
 
 struct Block {
