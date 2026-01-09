@@ -51,11 +51,12 @@ impl Codegen {
         writeln!(self.buf)?;
         write!(self.buf, "{}(", fun.name)?;
         self.params(&fun.params)?;
-        writeln!(self.buf, ")")
+        write!(self.buf, ")")
     }
 
     fn fun_def(&mut self, fun: FunItem) -> FmtResult {
         self.fun_sig(&fun)?;
+        writeln!(self.buf)?;
         writeln!(self.buf, "{{")?;
         self.with_block(|s| fun.body.into_iter().try_for_each(|stmt| s.stmt(stmt)))?;
         writeln!(self.buf, "}}")
@@ -75,7 +76,8 @@ impl Codegen {
 
     fn param(&mut self, (ident, typ): &(Ident, Type)) -> FmtResult {
         self.typ(typ)?;
-        write!(self.buf, " {ident}")
+        write!(self.buf, " ")?;
+        self.ident(ident)
     }
 
     fn typ(&mut self, typ: &Type) -> FmtResult {
@@ -113,38 +115,29 @@ impl Codegen {
     }
 
     fn stmt(&mut self, mut stmt: Span<Stmt>) -> FmtResult {
+        let span = stmt.span;
         let mut lifted = Vec::default();
 
         match &mut stmt.item {
-            Stmt::Expr(e) => self.try_lift_expr(stmt.span, e, &mut lifted),
+            Stmt::Expr(e) => self.lift_expr(span, e, &mut lifted),
             Stmt::Assign { rhs, .. } | Stmt::Update { rhs, .. } => {
-                self.try_lift_expr(rhs.span, &mut rhs.item, &mut lifted)
+                self.lift_expr(rhs.span, &mut rhs.item, &mut lifted)
             }
             Stmt::Return(e) => {
                 if let Some(e) = e {
-                    self.try_lift_expr(e.span, &mut e.item, &mut lifted);
+                    self.lift_expr(e.span, &mut e.item, &mut lifted);
                 }
             }
-            Stmt::If { then, elif, .. } => {
-                self.try_lift_expr(then.item.cond.span, &mut then.item.cond.item, &mut lifted);
-                elif.iter_mut().for_each(|b| {
-                    self.try_lift_expr(b.item.cond.span, &mut b.item.cond.item, &mut lifted);
-                });
-            }
-            Stmt::While(Branch { cond, .. }) => {
-                // FIXME: Should NOT lift here.
-                self.try_lift_expr(cond.span, &mut cond.item, &mut lifted);
-            }
-            Stmt::Break | Stmt::Continue => (),
+            Stmt::If { .. } | Stmt::While(Branch { .. }) | Stmt::Break | Stmt::Continue => (),
         };
 
-        lifted.push(stmt.item);
+        lifted.push(stmt);
 
-        self.with_indent(|s| {
-            lifted.iter().try_for_each(|stmt| {
-                match stmt {
+        lifted.into_iter().try_for_each(|stmt| {
+            self.with_indent(|s| {
+                match stmt.item {
                     Stmt::Expr(e) => {
-                        s.expr(e)?;
+                        s.expr(&e)?;
                         writeln!(s.buf, ";")
                     }
                     Stmt::Assign { name, typ, rhs } => {
@@ -170,18 +163,54 @@ impl Codegen {
                         writeln!(s.buf, ";")
                     }
                     Stmt::If { .. } => todo!(),
-                    Stmt::While(..) => {
-                        // Looks like this:
-                        //
+                    Stmt::While(Branch { mut cond, body }) => {
+                        // bool exit_1 = false;
                         // do {
-                        //      bool exit_1 = false;
+                        //      lifted_cond;
                         //      if (cond) {
                         //          body
                         //      } else {
                         //          exit_1 = true;
                         //      }
                         // } while (!exit_1);
-                        todo!()
+
+                        let mut lifted = Vec::default();
+                        s.lift_expr(cond.span, &mut cond.item, &mut lifted);
+
+                        let exit = s.fresh(span, "exit");
+                        write!(s.buf, "bool ")?;
+                        s.ident(&exit.item)?;
+                        writeln!(s.buf, " = false;")?;
+
+                        s.with_indent(|s|writeln!(s.buf, "do {{"))?;
+                        s.with_block(|s| {
+                            lifted.into_iter().try_for_each(|stmt| s.stmt(stmt))?;
+
+                            s.with_indent(|s| {
+                                write!(s.buf, "if (")?;
+                                s.expr(&cond.item)?;
+                                writeln!(s.buf, ") {{")
+                            })?;
+
+                            s.with_block(|s| body.into_iter().try_for_each(|stmt| s.stmt(stmt)))?;
+
+                            s.with_indent(|s| writeln!(s.buf, "}} else {{"))?;
+
+                            s.with_block(|s| {
+                                s.with_indent(|s| {
+                                    s.ident(&exit.item)?;
+                                    writeln!(s.buf, " = true;")
+                                })
+                            })?;
+
+                            s.with_indent(|s| writeln!(s.buf, "}}"))
+                        })?;
+
+                        s.with_indent(|s| {
+                            write!(s.buf, "}} while (!")?;
+                            s.ident(&exit.item)?;
+                            writeln!(s.buf, ");")
+                        })
                     }
                     Stmt::Break => writeln!(s.buf, "break;"),
                     Stmt::Continue => writeln!(s.buf, "continue;"),
@@ -190,15 +219,7 @@ impl Codegen {
         })
     }
 
-    fn try_lift_expr(&mut self, span: SimpleSpan, expr: &mut Expr, lifted: &mut Vec<Stmt>) {
-        let Expr::BinaryOp(lhs, .., rhs) = expr else {
-            return;
-        };
-        self.lift_expr(span, &mut lhs.item, lifted);
-        self.lift_expr(span, &mut rhs.item, lifted);
-    }
-
-    fn lift_expr(&mut self, span: SimpleSpan, expr: &mut Expr, lifted: &mut Vec<Stmt>) {
+    fn lift_expr(&mut self, span: SimpleSpan, expr: &mut Expr, lifted: &mut Vec<Span<Stmt>>) {
         match expr {
             Expr::BinaryOp(lhs, .., typ, rhs) => {
                 let typ = typ.as_deref().cloned();
@@ -206,11 +227,14 @@ impl Codegen {
                 self.lift_expr(span, &mut rhs.item, lifted);
                 let name = self.fresh(span, "lifted");
                 let rhs = replace(expr, Expr::Ident(name.item));
-                lifted.push(Stmt::Assign {
-                    name,
-                    typ,
-                    rhs: Span::new(span, rhs),
-                });
+                lifted.push(Span::new(
+                    span,
+                    Stmt::Assign {
+                        name,
+                        typ,
+                        rhs: Span::new(span, rhs),
+                    },
+                ));
             }
 
             Expr::Call(f, xs) => {

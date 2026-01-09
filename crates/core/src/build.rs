@@ -4,7 +4,7 @@ use std::path::Path;
 // FIXME: Should not be public.
 pub fn build(file: &Path) {
     let target = env!("CC_TARGET");
-    Build::new()
+    if !Build::new()
         .cargo_metadata(false)
         .cargo_output(false)
         .host(target)
@@ -18,5 +18,9 @@ pub fn build(file: &Path) {
         .spawn()
         .unwrap()
         .wait()
-        .unwrap();
+        .unwrap()
+        .success()
+    {
+        panic!("build failed")
+    }
 }

@@ -8,3 +8,10 @@ node_modules/
 dist/
 
 target/
+
+*.c
+*.out
+*.exe
+*.ilk
+*.obj
+*.pdb
