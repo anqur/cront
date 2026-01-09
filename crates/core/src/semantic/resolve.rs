@@ -1,4 +1,4 @@
-use crate::syntax::parse::{Branch, Constr, Def, Doc, Expr, File, Fun, Ident, Sig, Stmt};
+use crate::syntax::parse::{Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Sig, Stmt};
 use crate::{Error, Result};
 use crate::{ResolveErr, Span};
 use chumsky::prelude::SimpleSpan;
@@ -130,9 +130,10 @@ impl Resolver {
         match self
             .locals
             .get(&raw)
-            .or_else(|| self.constrs.get(&raw))
-            .or_else(|| self.globals.get(&raw))
             .cloned()
+            .or_else(|| self.constrs.get(&raw).cloned())
+            .or_else(|| self.globals.get(&raw).cloned())
+            .or_else(|| Builtin::from_raw(&raw))
         {
             Some(found) => name.id = found,
             None => self.errs.push(Span::new(span, ResolveErr::UndefName(raw))),

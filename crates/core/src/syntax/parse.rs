@@ -10,6 +10,8 @@ use chumsky::primitive::select;
 use serde_json::from_str;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::hash::{Hash, Hasher};
+use std::str::FromStr;
+use strum::{Display, EnumString};
 use ustr::Ustr;
 
 #[derive(Copy, Clone, Eq)]
@@ -52,6 +54,18 @@ impl PartialEq for Ident {
 impl Hash for Ident {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+#[derive(Debug, Copy, Clone, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub(crate) enum Builtin {
+    Assert,
+}
+
+impl Builtin {
+    pub(crate) fn from_raw(text: &str) -> Option<u64> {
+        Self::from_str(text).ok().map(|b| u64::MAX - b as u64)
     }
 }
 
