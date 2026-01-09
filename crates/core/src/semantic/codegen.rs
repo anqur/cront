@@ -182,7 +182,7 @@ impl Codegen {
                         s.ident(&exit.item)?;
                         writeln!(s.buf, " = false;")?;
 
-                        s.with_indent(|s|writeln!(s.buf, "do {{"))?;
+                        s.with_indent(|s| writeln!(s.buf, "do {{"))?;
                         s.with_block(|s| {
                             lifted.into_iter().try_for_each(|stmt| s.stmt(stmt))?;
 
