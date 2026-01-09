@@ -1,4 +1,4 @@
-use crate::syntax::lex::{Keyword, Symbol, Token};
+use crate::syntax::lex::{Keyword, Symbol, Token, lex};
 use crate::syntax::{Span, SyntaxError};
 use crate::{BuiltinType, Float, Integer};
 use chumsky::Parser;
@@ -207,10 +207,13 @@ pub enum Expr {
         Box<Span<Self>>,
     ),
     Object(Box<Span<Self>>, Vec<(Span<Ustr>, Span<Expr>)>),
+    #[allow(dead_code)]
     Access(Box<Span<Self>>, Span<Ustr>),
     Method {
         callee: Box<Span<Self>>,
+        #[allow(dead_code)]
         target: Option<Ident>,
+        #[allow(dead_code)]
         method: Span<Ident>,
         args: Vec<Span<Self>>,
     },
@@ -280,7 +283,7 @@ where
     name().map(|n| n.map(Ident::unbound))
 }
 
-pub fn expr<'t, I>() -> impl Parser<'t, I, Span<Expr>, ParseError<'t>> + Clone
+fn expr<'t, I>() -> impl Parser<'t, I, Span<Expr>, ParseError<'t>> + Clone
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -389,7 +392,7 @@ where
     })
 }
 
-pub fn stmt<'t, I>() -> impl Parser<'t, I, Span<Stmt>, ParseError<'t>>
+fn stmt<'t, I>() -> impl Parser<'t, I, Span<Stmt>, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -679,7 +682,7 @@ where
         .labelled("struct definition")
 }
 
-pub fn file<'t, I>() -> impl Parser<'t, I, File, ParseError<'t>>
+fn file<'t, I>() -> impl Parser<'t, I, File, ParseError<'t>>
 where
     I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
 {
@@ -691,4 +694,9 @@ where
             main: Default::default(),
         })
         .labelled("file")
+}
+
+pub fn parse(text: &str) -> File {
+    let tokens = lex().parse(text).unwrap();
+    file().parse(tokens.tokens.as_slice()).unwrap()
 }

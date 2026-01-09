@@ -1,15 +1,8 @@
-use crate::syntax::lex::lex;
-use crate::syntax::parse::File;
-use crate::{build, check, file, generate, resolve};
-use chumsky::Parser;
+use crate::syntax::parse::parse;
+use crate::{build, check, generate, resolve};
 use std::fmt::Write;
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
-
-fn parse(text: &str) -> File {
-    let tokens = lex().parse(text).unwrap();
-    file().parse(tokens.tokens.as_slice()).unwrap()
-}
 
 const PARSE_TEXTS: &[&str] = &[include_str!("main.cront"), include_str!("struct.cront")];
 

@@ -127,7 +127,7 @@ pub enum Token {
 
 type LexError<'a> = SyntaxError<'a, char>;
 
-pub fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
+pub(crate) fn lex<'s>() -> impl Parser<'s, &'s str, Tokens, LexError<'s>> {
     let dec = digits(10).to_slice();
     let frac = just('.').then(dec);
     let exp = choice((just('e'), just('E')))
