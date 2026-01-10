@@ -129,13 +129,13 @@ impl Codegen {
         let mut lifted = Vec::default();
 
         match &mut stmt.item {
-            Stmt::Expr(e) => self.lift_expr(span, e, &mut lifted),
+            Stmt::Expr(e) => self.lift_expr(span, 0, e, &mut lifted),
             Stmt::Assign { rhs, .. } | Stmt::Update { rhs, .. } => {
-                self.lift_expr(rhs.span, &mut rhs.item, &mut lifted)
+                self.lift_expr(rhs.span, 0, &mut rhs.item, &mut lifted)
             }
             Stmt::Return(e) => {
                 if let Some(e) = e {
-                    self.lift_expr(e.span, &mut e.item, &mut lifted);
+                    self.lift_expr(e.span, 0, &mut e.item, &mut lifted);
                 }
             }
             Stmt::If { .. } | Stmt::While(Branch { .. }) | Stmt::Break | Stmt::Continue => (),
@@ -185,7 +185,7 @@ impl Codegen {
                         // } while (!exit_1);
 
                         let mut lifted = Vec::default();
-                        s.lift_expr(cond.span, &mut cond.item, &mut lifted);
+                        s.lift_expr(cond.span, 0, &mut cond.item, &mut lifted);
 
                         let exit = s.fresh_exit(span);
                         write!(s.buf, "bool ")?;
@@ -229,19 +229,27 @@ impl Codegen {
         })
     }
 
-    fn lift_expr(&mut self, span: SimpleSpan, expr: &mut Expr, lifted: &mut Vec<Span<Stmt>>) {
+    fn lift_expr(
+        &mut self,
+        span: SimpleSpan,
+        depth: usize,
+        expr: &mut Expr,
+        lifted: &mut Vec<Span<Stmt>>,
+    ) {
         match expr {
             Expr::BinaryOp { lhs, typ, rhs, .. } => {
-                self.lift_expr(span, &mut lhs.item, lifted);
-                self.lift_expr(span, &mut rhs.item, lifted);
-                self.replace_expr(span, typ.as_deref().cloned(), expr, lifted);
+                self.lift_expr(span, depth + 1, &mut lhs.item, lifted);
+                self.lift_expr(span, depth + 1, &mut rhs.item, lifted);
+                if depth > 0 {
+                    self.replace_expr(span, typ.as_deref().cloned(), expr, lifted);
+                }
             }
             Expr::Call { callee, args, typ } => {
-                self.lift_expr(callee.span, &mut callee.item, lifted);
+                self.lift_expr(callee.span, depth + 1, &mut callee.item, lifted);
                 args.iter_mut()
-                    .for_each(|x| self.lift_expr(span, &mut x.item, lifted));
+                    .for_each(|x| self.lift_expr(span, depth + 1, &mut x.item, lifted));
                 let typ = typ.as_deref().unwrap();
-                if !matches!(&typ.item, Expr::BuiltinType(BuiltinType::Void)) {
+                if depth > 0 && !matches!(&typ.item, Expr::BuiltinType(BuiltinType::Void)) {
                     // Only lift non-void function calls.
                     self.replace_expr(span, Some(typ.clone()), expr, lifted);
                 }
