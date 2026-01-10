@@ -166,16 +166,13 @@ pub enum Type {
         ret: Box<Self>,
     },
     Ident(Ident),
+    CType {
+        from: Box<Self>,
+        to: &'static str,
+    },
 }
 
 impl Type {
-    fn main() -> Self {
-        Self::Fun(Box::new(FunType {
-            params: Default::default(),
-            ret: Self::Builtin(BuiltinType::Void),
-        }))
-    }
-
     fn to_expr(&self, span: SimpleSpan) -> Span<Expr> {
         Span::new(
             span,
@@ -186,6 +183,14 @@ impl Type {
                 _ => unreachable!(),
             },
         )
+    }
+
+    fn to_builtin(&self) -> Option<BuiltinType> {
+        match self {
+            Self::Builtin(t) => Some(*t),
+            Self::CType { from: t, .. } => t.to_builtin(),
+            _ => None,
+        }
     }
 }
 
@@ -201,6 +206,7 @@ impl Display for Type {
             },
             Self::Generic { typ, constr, ret } => write!(f, "({typ}: {constr}) => {ret}"),
             Self::Ident(i) => write!(f, "{i}"),
+            Self::CType { from, to } => write!(f, "{from} as {to}"),
         }
     }
 }

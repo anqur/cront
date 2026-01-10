@@ -1,6 +1,5 @@
 use crate::syntax::parse::parse;
 use crate::{build, check, generate, resolve};
-use std::fmt::Write;
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
 
@@ -59,11 +58,7 @@ fn it_builds() {
         let text = read_to_string(&path).unwrap();
         let mut file = parse(&text);
         resolve(&mut file).unwrap();
-        let mut code = generate(check(&mut file).unwrap());
-        // FIXME: Entry function.
-        writeln!(code).unwrap();
-        writeln!(code, "int main() {{ return 0; }}").unwrap();
-        write(&out, code).unwrap();
+        write(&out, generate(check(&mut file).unwrap())).unwrap();
         build(&out);
     }
 }

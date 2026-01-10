@@ -1,5 +1,5 @@
 use crate::semantic::check::{FunItem, Items};
-use crate::syntax::parse::{Branch, Expr, Ident, Stmt};
+use crate::syntax::parse::{Branch, Builtin, Expr, Ident, Idents, Stmt};
 use crate::{BuiltinType, Span, Type};
 use chumsky::prelude::SimpleSpan;
 use std::fmt::{Result as FmtResult, Write};
@@ -9,17 +9,18 @@ pub fn generate(items: Items) -> String {
     Codegen::default().generate(items)
 }
 
-const INCLUDES: &[&str] = &["stdbool.h", "stddef.h", "stdint.h"];
+const INCLUDES: &[&str] = &["stdbool.h", "stddef.h", "stdint.h", "assert.h"];
 
 #[derive(Default)]
 struct Codegen {
+    idents: Idents,
     buf: String,
-    next_id: u64,
     level: usize,
 }
 
 impl Codegen {
     fn generate(mut self, items: Items) -> String {
+        self.idents = items.idents;
         self.items(items).unwrap();
         self.buf
     }
@@ -46,12 +47,14 @@ impl Codegen {
     }
 
     fn fun_sig(&mut self, fun: &FunItem) -> FmtResult {
-        write!(self.buf, "static ")?;
+        // FIXME: Any better approach?
+        if fun.name.text != "main" {
+            write!(self.buf, "static ")?;
+        }
         self.typ(&fun.ret)?;
         writeln!(self.buf)?;
-        write!(self.buf, "{}(", fun.name)?;
-        self.params(&fun.params)?;
-        write!(self.buf, ")")
+        self.ident(&fun.name)?;
+        self.params(&fun.params)
     }
 
     fn fun_def(&mut self, fun: FunItem) -> FmtResult {
@@ -63,6 +66,7 @@ impl Codegen {
     }
 
     fn params(&mut self, params: &[(Ident, Type)]) -> FmtResult {
+        write!(self.buf, "(")?;
         let mut it = params.iter();
         if let Some(param) = it.next() {
             self.param(param)?
@@ -71,7 +75,7 @@ impl Codegen {
             write!(self.buf, ", ")?;
             self.param(param)?
         }
-        Ok(())
+        write!(self.buf, ")")
     }
 
     fn param(&mut self, (ident, typ): &(Ident, Type)) -> FmtResult {
@@ -91,6 +95,7 @@ impl Codegen {
             Type::Array { .. } => todo!(),
             Type::Generic { .. } => unreachable!(),
             Type::Ident(..) => unreachable!(),
+            Type::CType { to, .. } => write!(self.buf, "{to}"),
         }
     }
 
@@ -220,6 +225,7 @@ impl Codegen {
     }
 
     fn lift_expr(&mut self, span: SimpleSpan, expr: &mut Expr, lifted: &mut Vec<Span<Stmt>>) {
+        // TODO: Function calls should be lifted.
         match expr {
             Expr::BinaryOp(lhs, .., typ, rhs) => {
                 let typ = typ.as_deref().cloned();
@@ -259,10 +265,7 @@ impl Codegen {
     }
 
     fn fresh(&mut self, span: SimpleSpan, name: &str) -> Span<Ident> {
-        self.next_id += 1;
-        let mut i = Ident::unbound(name.into());
-        i.fresh(self.next_id);
-        Span::new(span, i)
+        Span::new(span, self.idents.ident(name.into()))
     }
 
     #[allow(dead_code)]
@@ -277,7 +280,19 @@ impl Codegen {
             Expr::Float(f) => write!(self.buf, "{f}"),
             Expr::String(s) => write!(self.buf, "{s}"),
             Expr::Boolean(b) => write!(self.buf, "{b}"),
-            Expr::Call(..) => todo!(),
+            Expr::Call(f, xs) => {
+                self.expr(&f.item)?;
+                write!(self.buf, "(")?;
+                let mut it = xs.iter();
+                if let Some(x) = it.next() {
+                    self.expr(&x.item)?;
+                }
+                for x in it {
+                    write!(self.buf, ", ")?;
+                    self.expr(&x.item)?;
+                }
+                write!(self.buf, ")")
+            }
             Expr::BinaryOp(lhs, op, .., rhs) => {
                 self.expr(&lhs.item)?;
                 write!(self.buf, " {op} ")?;
@@ -290,6 +305,13 @@ impl Codegen {
     }
 
     fn ident(&mut self, i: &Ident) -> FmtResult {
+        if let Some(b) = Builtin::from_id(i.id) {
+            return write!(self.buf, "{b}");
+        }
+        // FIXME: Any better approach?
+        if i.text == "main" {
+            return write!(self.buf, "main");
+        }
         write!(self.buf, "{}_{}", i.text, i.id)
     }
 

@@ -7,12 +7,29 @@ use chumsky::input::{MapExtra, ValueInput};
 use chumsky::pratt::{infix, left, prefix};
 use chumsky::prelude::{Input, IterParser, SimpleSpan, choice, just, recursive};
 use chumsky::primitive::select;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde_json::from_str;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use ustr::Ustr;
+
+#[derive(Default, Debug, Copy, Clone)]
+pub(crate) struct Idents(u64);
+
+impl Idents {
+    pub(crate) fn fresh(&mut self, ident: &mut Ident) {
+        self.0 += 1;
+        ident.fresh(self.0);
+    }
+
+    pub(crate) fn ident(&mut self, text: Ustr) -> Ident {
+        let mut i = Ident::unbound(text);
+        self.fresh(&mut i);
+        i
+    }
+}
 
 #[derive(Copy, Clone, Eq)]
 pub struct Ident {
@@ -57,20 +74,27 @@ impl Hash for Ident {
     }
 }
 
-#[derive(Debug, Copy, Clone, Display, EnumString)]
-#[strum(serialize_all = "snake_case")]
+#[repr(u64)]
+#[derive(Debug, Copy, Clone, Display, EnumString, IntoPrimitive, TryFromPrimitive)]
 pub(crate) enum Builtin {
+    #[strum(serialize = "assert")]
     Assert,
+    CInt,
 }
 
 impl Builtin {
     pub(crate) fn from_raw(text: &str) -> Option<u64> {
         Self::from_str(text).ok().map(|b| u64::MAX - b as u64)
     }
+
+    pub(crate) fn from_id(id: u64) -> Option<Self> {
+        Self::try_from(u64::MAX - id).ok()
+    }
 }
 
 #[derive(Default, Debug)]
 pub struct File {
+    pub(crate) idents: Idents,
     pub(crate) decls: Vec<Span<Doc<Decl>>>,
     pub(crate) main: Option<Ident>,
 }
@@ -705,7 +729,7 @@ where
         .collect::<Vec<_>>()
         .map(|decls| File {
             decls,
-            main: Default::default(),
+            ..Default::default()
         })
         .labelled("file")
 }

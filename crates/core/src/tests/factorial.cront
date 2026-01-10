@@ -7,7 +7,7 @@ fun factorial(n: U32) U32 {
     return a;
 }
 
-// TODO
-//fun main() CInt<I32> {
-//    assert(factorial(10) == 3628800);
-//}
+fun main() CInt<I32> {
+    assert(factorial(10) == 3628800);
+    return 0;
+}

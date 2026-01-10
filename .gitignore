@@ -11,6 +11,7 @@ target/
 
 *.c
 *.out
+*.dSYM
 *.exe
 *.ilk
 *.obj

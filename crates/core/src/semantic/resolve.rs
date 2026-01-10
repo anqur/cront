@@ -1,4 +1,6 @@
-use crate::syntax::parse::{Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Sig, Stmt};
+use crate::syntax::parse::{
+    Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Sig, Stmt,
+};
 use crate::{Error, Result};
 use crate::{ResolveErr, Span};
 use chumsky::prelude::SimpleSpan;
@@ -10,7 +12,7 @@ pub fn resolve(file: &mut File) -> Result<()> {
 
 #[derive(Default)]
 struct Resolver {
-    next_id: u64,
+    idents: Idents,
     globals: UstrMap<u64>,
     constrs: UstrMap<u64>,
     locals: UstrMap<u64>,
@@ -65,6 +67,17 @@ impl Resolver {
                 Def::Struct => (),
             }
         });
+
+        file.main = {
+            let raw = Ustr::from("main");
+            self.globals.get(&raw).cloned().map(|id| {
+                let mut i = Ident::unbound(raw);
+                i.fresh(id);
+                i
+            })
+        };
+        file.idents = self.idents;
+
         if self.errs.is_empty() {
             Ok(())
         } else {
@@ -141,8 +154,7 @@ impl Resolver {
     }
 
     fn fresh(&mut self, raw: &mut Span<Ident>) {
-        self.next_id += 1;
-        raw.item.fresh(self.next_id);
+        self.idents.fresh(&mut raw.item);
     }
 
     fn block(&mut self, mut block: Block, stmts: &mut [Span<Stmt>]) {

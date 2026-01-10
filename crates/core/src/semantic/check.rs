@@ -1,5 +1,7 @@
 use crate::syntax::lex::Symbol;
-use crate::syntax::parse::{Branch, Constr, Def, Doc, Expr, File, Fun, Ident, Sig, Stmt};
+use crate::syntax::parse::{
+    Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Sig, Stmt,
+};
 use crate::{BuiltinType, CheckErr, Error, Float, FunType, Integer, Result, Span, Type};
 use chumsky::prelude::SimpleSpan;
 use std::collections::HashMap;
@@ -11,6 +13,7 @@ pub fn check(file: &mut File) -> Result<Items> {
 
 #[derive(Default)]
 pub struct Items {
+    pub(crate) idents: Idents,
     pub(crate) fns: Vec<Span<FunItem>>,
 }
 
@@ -51,6 +54,8 @@ struct Checker {
 
 impl Checker {
     fn file(mut self, file: &mut File) -> Result<Items> {
+        self.items.idents = file.idents;
+
         let mut fns = Vec::default();
 
         file.decls.iter_mut().for_each(|decl| {
@@ -73,7 +78,16 @@ impl Checker {
                                 ret: Box::new(ret),
                             });
                     if file.main.as_ref() == Some(&fun.name.item) {
-                        self.isa(span, &got, &Type::main());
+                        self.check_arity(fun.name.span, fun.params.len(), 0);
+                        if !matches!(ctx.ret, Type::CType { to, .. } if to == "int") {
+                            self.errs.push(Span::new(
+                                span,
+                                CheckErr::TypeMismatch {
+                                    got: ctx.ret.to_string(),
+                                    want: "CInt".to_string(),
+                                },
+                            ))
+                        }
                     }
                     fns.push(ctx);
                     self.globals.insert(fun.name.item, Inferred::constr(f, got));
@@ -171,7 +185,7 @@ impl Checker {
         block.olds.push((ident, self.locals.insert(ident, typ)));
     }
 
-    fn ident(&self, ident: &Ident) -> Inferred {
+    fn ident(&mut self, ident: &Ident) -> Inferred {
         self.locals
             .get(ident)
             .cloned()
@@ -183,7 +197,35 @@ impl Checker {
                     .map(|c| Inferred::constr(Type::Ident(*ident), c))
             })
             .or_else(|| self.globals.get(ident).cloned())
+            .or_else(|| Builtin::from_id(ident.id).map(|b| self.builtin(b)))
             .unwrap()
+    }
+
+    fn fresh(&mut self, text: &str) -> Ident {
+        self.items.idents.ident(text.into())
+    }
+
+    fn builtin(&mut self, b: Builtin) -> Inferred {
+        match b {
+            Builtin::Assert => Inferred::value(Type::Fun(Box::new(FunType {
+                params: vec![Type::Builtin(BuiltinType::Bool)],
+                ret: Type::Builtin(BuiltinType::Void),
+            }))),
+            Builtin::CInt => {
+                let typ = self.fresh("t");
+                Inferred::constr(
+                    Type::CType {
+                        from: Box::new(Type::Ident(typ)),
+                        to: "int",
+                    },
+                    Type::Generic {
+                        typ,
+                        constr: Box::new(Type::Builtin(BuiltinType::Type)),
+                        ret: Box::new(Type::Builtin(BuiltinType::Type)),
+                    },
+                )
+            }
+        }
     }
 
     fn block(&mut self, mut block: Block, stmts: &mut [Span<Stmt>]) -> Type {
@@ -263,7 +305,7 @@ impl Checker {
 
     fn check(&mut self, span: SimpleSpan, expr: &mut Expr, want: &Type) -> Option<Type> {
         if let Expr::Integer(Integer::I64(n)) = expr
-            && let Type::Builtin(t) = want
+            && let Some(t) = want.to_builtin()
             && t.is_integer()
             && let Some(n) = t.narrow_integer(*n)
         {
@@ -272,7 +314,7 @@ impl Checker {
         }
 
         if let Expr::Float(Float::F64(n)) = expr
-            && let Type::Builtin(t) = want
+            && let Some(t) = want.to_builtin()
             && t.is_float()
         {
             *expr = Expr::Float(t.narrow_float(*n));
@@ -296,14 +338,17 @@ impl Checker {
         args: I,
         params: &[Type],
     ) {
-        let want = params.len();
+        self.check_arity(span, got, params.len());
+        args.zip(params.iter()).for_each(|(got, want)| {
+            self.check(got.span, &mut got.item, want);
+        })
+    }
+
+    fn check_arity(&mut self, span: SimpleSpan, got: usize, want: usize) {
         if got != want {
             self.errs
                 .push(Span::new(span, CheckErr::ArityMismatch { got, want }))
         }
-        args.zip(params.iter()).for_each(|(got, want)| {
-            self.check(got.span, &mut got.item, want);
-        })
     }
 
     fn check_number(
@@ -402,6 +447,7 @@ impl Checker {
                 Symbol::EqEq => {
                     let got = self.infer(lhs.span, &mut lhs.item).rhs;
                     self.check(rhs.span, &mut rhs.item, &got);
+                    *typ = Some(Box::new(got.to_expr(lhs.span)));
                     Type::Builtin(BuiltinType::Bool)
                 }
                 Symbol::Lt | Symbol::Gt | Symbol::Le | Symbol::Ge => {
@@ -445,6 +491,9 @@ impl Checker {
                 self.isa(span, x, y)
             }
             (Type::Ident(a), Type::Ident(b)) if a == b => (),
+            (Type::CType { from: a, to: x }, Type::CType { from: b, to: y }) if x == y => {
+                self.isa(span, a, b)
+            }
             _ => {
                 let got = got.to_string();
                 let want = want.to_string();
@@ -510,6 +559,7 @@ impl Applier {
                 self.apply(ret);
             }
             Type::Ident(id) => *t = self.0.get(id).cloned().unwrap(),
+            Type::CType { from, .. } => self.apply(from),
         }
     }
 }
