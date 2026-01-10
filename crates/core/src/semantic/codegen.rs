@@ -41,6 +41,7 @@ impl Codegen {
 
         for fun in items.fns.into_iter().filter(|f| f.is_concrete()) {
             self.fun_def(fun.item)?;
+            writeln!(self.buf)?;
         }
 
         Ok(())
@@ -67,13 +68,17 @@ impl Codegen {
 
     fn params(&mut self, params: &[(Ident, Type)]) -> FmtResult {
         write!(self.buf, "(")?;
-        let mut it = params.iter();
-        if let Some(param) = it.next() {
-            self.param(param)?
-        }
-        for param in it {
-            write!(self.buf, ", ")?;
-            self.param(param)?
+        if params.is_empty() {
+            write!(self.buf, "void")?;
+        } else {
+            let mut it = params.iter();
+            if let Some(param) = it.next() {
+                self.param(param)?
+            }
+            for param in it {
+                write!(self.buf, ", ")?;
+                self.param(param)?
+            }
         }
         write!(self.buf, ")")
     }
@@ -182,7 +187,7 @@ impl Codegen {
                         let mut lifted = Vec::default();
                         s.lift_expr(cond.span, &mut cond.item, &mut lifted);
 
-                        let exit = s.fresh(span, "exit");
+                        let exit = s.fresh_exit(span);
                         write!(s.buf, "bool ")?;
                         s.ident(&exit.item)?;
                         writeln!(s.buf, " = false;")?;
@@ -225,29 +230,23 @@ impl Codegen {
     }
 
     fn lift_expr(&mut self, span: SimpleSpan, expr: &mut Expr, lifted: &mut Vec<Span<Stmt>>) {
-        // TODO: Function calls should be lifted.
         match expr {
-            Expr::BinaryOp(lhs, .., typ, rhs) => {
-                let typ = typ.as_deref().cloned();
+            Expr::BinaryOp { lhs, typ, rhs, .. } => {
                 self.lift_expr(span, &mut lhs.item, lifted);
                 self.lift_expr(span, &mut rhs.item, lifted);
-                let name = self.fresh(span, "lifted");
-                let rhs = replace(expr, Expr::Ident(name.item));
-                lifted.push(Span::new(
-                    span,
-                    Stmt::Assign {
-                        name,
-                        typ,
-                        rhs: Span::new(span, rhs),
-                    },
-                ));
+                self.replace_expr(span, typ.as_deref().cloned(), expr, lifted);
+            }
+            Expr::Call { callee, args, typ } => {
+                self.lift_expr(callee.span, &mut callee.item, lifted);
+                args.iter_mut()
+                    .for_each(|x| self.lift_expr(span, &mut x.item, lifted));
+                let typ = typ.as_deref().unwrap();
+                if !matches!(&typ.item, Expr::BuiltinType(BuiltinType::Void)) {
+                    // Only lift non-void function calls.
+                    self.replace_expr(span, Some(typ.clone()), expr, lifted);
+                }
             }
 
-            Expr::Call(f, xs) => {
-                self.lift_expr(span, &mut f.item, lifted);
-                xs.iter_mut()
-                    .for_each(|x| self.lift_expr(span, &mut x.item, lifted));
-            }
             Expr::Object(..) => todo!(),
             Expr::Access(..) => todo!(),
             Expr::Method { .. } => todo!(),
@@ -264,11 +263,36 @@ impl Codegen {
         }
     }
 
+    fn replace_expr(
+        &mut self,
+        span: SimpleSpan,
+        typ: Option<Span<Expr>>,
+        expr: &mut Expr,
+        lifted: &mut Vec<Span<Stmt>>,
+    ) {
+        let name = self.fresh_lifted(span);
+        lifted.push(Span::new(
+            span,
+            Stmt::Assign {
+                typ,
+                rhs: Span::new(span, replace(expr, Expr::Ident(name.item))),
+                name,
+            },
+        ));
+    }
+
+    fn fresh_lifted(&mut self, span: SimpleSpan) -> Span<Ident> {
+        self.fresh(span, "__lifted")
+    }
+
+    fn fresh_exit(&mut self, span: SimpleSpan) -> Span<Ident> {
+        self.fresh(span, "__exit")
+    }
+
     fn fresh(&mut self, span: SimpleSpan, name: &str) -> Span<Ident> {
         Span::new(span, self.idents.ident(name.into()))
     }
 
-    #[allow(dead_code)]
     fn expr(&mut self, expr: &Expr) -> FmtResult {
         match expr {
             Expr::Ident(i) => self.ident(i),
@@ -280,10 +304,10 @@ impl Codegen {
             Expr::Float(f) => write!(self.buf, "{f}"),
             Expr::String(s) => write!(self.buf, "{s}"),
             Expr::Boolean(b) => write!(self.buf, "{b}"),
-            Expr::Call(f, xs) => {
-                self.expr(&f.item)?;
+            Expr::Call { callee, args, .. } => {
+                self.expr(&callee.item)?;
                 write!(self.buf, "(")?;
-                let mut it = xs.iter();
+                let mut it = args.iter();
                 if let Some(x) = it.next() {
                     self.expr(&x.item)?;
                 }
@@ -293,7 +317,7 @@ impl Codegen {
                 }
                 write!(self.buf, ")")
             }
-            Expr::BinaryOp(lhs, op, .., rhs) => {
+            Expr::BinaryOp { lhs, op, rhs, .. } => {
                 self.expr(&lhs.item)?;
                 write!(self.buf, " {op} ")?;
                 self.expr(&rhs.item)

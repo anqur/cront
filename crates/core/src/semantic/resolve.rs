@@ -218,9 +218,9 @@ impl Resolver {
         match expr {
             Expr::Ident(name) => self.name(span, name),
             Expr::BuiltinType(..) => (),
-            Expr::Apply(f, xs) | Expr::Call(f, xs) => {
-                self.expr(f.span, &mut f.item);
-                xs.iter_mut().for_each(|x| self.expr(x.span, &mut x.item));
+            Expr::Apply(callee, args) | Expr::Call { callee, args, .. } => {
+                self.expr(callee.span, &mut callee.item);
+                args.iter_mut().for_each(|x| self.expr(x.span, &mut x.item));
             }
             Expr::RefType(t) => self.expr(t.span, &mut t.item),
             Expr::ArrayType { elem, len } => {
@@ -233,9 +233,9 @@ impl Resolver {
             Expr::Float(..) => (),
             Expr::String(..) => (),
             Expr::Boolean(..) => (),
-            Expr::BinaryOp(a, .., b) => {
-                self.expr(a.span, &mut a.item);
-                self.expr(b.span, &mut b.item);
+            Expr::BinaryOp { lhs, rhs, .. } => {
+                self.expr(lhs.span, &mut lhs.item);
+                self.expr(rhs.span, &mut rhs.item);
             }
             Expr::Object(a, o) => {
                 self.expr(a.span, &mut a.item);

@@ -1,7 +1,6 @@
 use cc::Build;
 use std::path::Path;
 
-// FIXME: Should not be public.
 pub fn build(file: &Path) {
     let target = env!("CC_TARGET");
     if !Build::new()

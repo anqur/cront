@@ -427,23 +427,27 @@ impl Checker {
             }
             Expr::String(..) => Type::Builtin(BuiltinType::Str),
             Expr::Boolean(..) => Type::Builtin(BuiltinType::Bool),
-            Expr::Call(f, args) => match self.infer(f.span, &mut f.item).rhs {
-                Type::Fun(typ) => {
-                    self.check_args(span, args.len(), args.iter_mut(), &typ.params);
-                    typ.ret
-                }
-                got => {
-                    self.errs.push(Span::new(
-                        span,
-                        CheckErr::TypeMismatch {
-                            got: got.to_string(),
-                            want: "function".to_string(),
-                        },
-                    ));
-                    got
-                }
-            },
-            Expr::BinaryOp(lhs, op, typ, rhs) => match op {
+            Expr::Call { callee, args, typ } => {
+                let got = match self.infer(callee.span, &mut callee.item).rhs {
+                    Type::Fun(typ) => {
+                        self.check_args(span, args.len(), args.iter_mut(), &typ.params);
+                        typ.ret
+                    }
+                    got => {
+                        self.errs.push(Span::new(
+                            span,
+                            CheckErr::TypeMismatch {
+                                got: got.to_string(),
+                                want: "function".to_string(),
+                            },
+                        ));
+                        got
+                    }
+                };
+                *typ = Some(Box::new(got.to_expr(span)));
+                got
+            }
+            Expr::BinaryOp { lhs, op, typ, rhs } => match op {
                 Symbol::EqEq => {
                     let got = self.infer(lhs.span, &mut lhs.item).rhs;
                     self.check(rhs.span, &mut rhs.item, &got);

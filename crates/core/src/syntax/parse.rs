@@ -140,14 +140,11 @@ pub(crate) enum Sig {
         name: Span<Ident>,
         constrs: Vec<Span<Doc<Constr>>>,
     },
+    #[allow(dead_code)]
     Struct {
-        #[allow(dead_code)]
         name: Span<Ident>,
-        #[allow(dead_code)]
         constrs: Vec<Span<Doc<Constr>>>,
-        #[allow(dead_code)]
         members: Vec<Span<Doc<Member>>>,
-        #[allow(dead_code)]
         optional: Option<Span<Doc<Param>>>,
     },
 }
@@ -182,10 +179,9 @@ pub(crate) enum Def {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum Member {
-    #[allow(dead_code)]
     Data(Param),
-    #[allow(dead_code)]
     Type(Constr),
 }
 
@@ -237,21 +233,24 @@ pub enum Expr {
     String(String),
     Boolean(bool),
 
-    Call(Box<Span<Self>>, Vec<Span<Self>>),
-    BinaryOp(
-        Box<Span<Self>>,
-        Symbol,
-        Option<Box<Span<Self>>>,
-        Box<Span<Self>>,
-    ),
+    Call {
+        callee: Box<Span<Self>>,
+        args: Vec<Span<Self>>,
+        typ: Option<Box<Span<Self>>>,
+    },
+    BinaryOp {
+        lhs: Box<Span<Self>>,
+        op: Symbol,
+        typ: Option<Box<Span<Self>>>,
+        rhs: Box<Span<Self>>,
+    },
     Object(Box<Span<Self>>, Vec<(Span<Ustr>, Span<Expr>)>),
     #[allow(dead_code)]
     Access(Box<Span<Self>>, Span<Ustr>),
+    #[allow(dead_code)]
     Method {
         callee: Box<Span<Self>>,
-        #[allow(dead_code)]
         target: Option<Ident>,
-        #[allow(dead_code)]
         method: Span<Ident>,
         args: Vec<Span<Self>>,
     },
@@ -268,10 +267,13 @@ impl Expr {
         I: Input<'src, Span = SimpleSpan>,
         E: ParserExtra<'src, I>,
     {
-        let Token::Symbol(sym) = op else {
+        let Token::Symbol(op) = op else {
             unreachable!()
         };
-        Span::from_map_extra(Self::BinaryOp(Box::new(lhs), sym, None, Box::new(rhs)), e)
+        let lhs = Box::new(lhs);
+        let rhs = Box::new(rhs);
+        let typ = None;
+        Span::from_map_extra(Self::BinaryOp { lhs, op, typ, rhs }, e)
     }
 }
 
@@ -382,7 +384,11 @@ where
                 Span::new(
                     e.span(),
                     match c {
-                        Chainer::Args(args) => Expr::Call(Box::new(a), args),
+                        Chainer::Args(args) => Expr::Call {
+                            callee: Box::new(a),
+                            args,
+                            typ: None,
+                        },
                         Chainer::Initialize(xs) => Expr::Object(Box::new(a), xs),
                         Chainer::Access(m) => Expr::Access(Box::new(a), m),
                         Chainer::Method(method, args) => Expr::Method {
