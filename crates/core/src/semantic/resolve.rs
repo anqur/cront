@@ -29,9 +29,10 @@ impl Resolver {
                         self.fun(fun);
                         Some(fun.name.clone())
                     }
-                    Sig::Typ { name, constrs } => {
+                    Sig::Typ { name, constrs, typ } => {
                         self.fresh(name);
                         self.constrs(constrs);
+                        self.with_constrs(constrs, |s| s.expr(typ.span, &mut typ.item));
                         Some(name.clone())
                     }
                     Sig::Struct { .. } => todo!(),
@@ -58,13 +59,7 @@ impl Resolver {
                         s.block(block, body);
                     })
                 }
-                Def::Typ(t) => {
-                    let Sig::Typ { constrs, .. } = &mut decl.sig else {
-                        unreachable!()
-                    };
-                    self.with_constrs(constrs, |s| s.expr(t.span, &mut t.item));
-                }
-                Def::Struct => (),
+                Def::Typ | Def::Struct => (),
             }
         });
 

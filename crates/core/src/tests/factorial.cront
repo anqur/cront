@@ -7,7 +7,9 @@ fun factorial(n: U32) U32 {
     return a;
 }
 
-fun main() CInt<I32> {
+typ Errno = CInt<I32>;
+
+fun main() Errno {
     assert(factorial(10) == 3628800);
     return 0;
 }

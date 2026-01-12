@@ -139,6 +139,7 @@ pub(crate) enum Sig {
     Typ {
         name: Span<Ident>,
         constrs: Vec<Span<Doc<Constr>>>,
+        typ: Span<Expr>,
     },
     #[allow(dead_code)]
     Struct {
@@ -174,7 +175,7 @@ pub(crate) struct Constr {
 #[derive(Debug)]
 pub(crate) enum Def {
     Fun(Vec<Span<Stmt>>),
-    Typ(Span<Expr>),
+    Typ,
     Struct,
 }
 
@@ -658,8 +659,8 @@ where
         .map(|(((doc, name), constrs), typ)| Doc {
             doc,
             item: Decl {
-                sig: Sig::Typ { name, constrs },
-                def: Def::Typ(typ),
+                sig: Sig::Typ { name, constrs, typ },
+                def: Def::Typ,
             },
         })
         .map_with(Span::from_map_extra)

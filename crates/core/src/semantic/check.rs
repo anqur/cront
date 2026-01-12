@@ -68,15 +68,7 @@ impl Checker {
                         params: ctx.params.iter().map(|(.., typ)| typ.clone()).collect(),
                         ret: ctx.ret.clone(),
                     }));
-                    let got =
-                        ctx.constrs
-                            .clone()
-                            .into_iter()
-                            .rfold(f.clone(), |ret, (typ, constr)| Type::Generic {
-                                typ,
-                                constr: Box::new(constr),
-                                ret: Box::new(ret),
-                            });
+                    let got = Type::generic(f.clone(), ctx.constrs.clone());
                     if file.main.as_ref() == Some(&fun.name.item) {
                         self.check_arity(fun.name.span, fun.params.len(), 0);
                         if !matches!(ctx.ret, Type::CType { to, .. } if to == "int") {
@@ -92,7 +84,12 @@ impl Checker {
                     fns.push(ctx);
                     self.globals.insert(fun.name.item, Inferred::constr(f, got));
                 }
-                Sig::Typ { .. } => todo!(),
+                Sig::Typ { name, constrs, typ } => {
+                    let typ = self.check_type(typ.span, &mut typ.item);
+                    let constrs = self.constrs(constrs);
+                    let got = Type::generic(Type::Builtin(BuiltinType::Type), constrs);
+                    self.globals.insert(name.item, Inferred::constr(typ, got));
+                }
                 Sig::Struct { .. } => todo!(),
             }
         });
@@ -117,8 +114,7 @@ impl Checker {
                     item.body = take(body);
                     self.items.fns.push(decl.with(item));
                 }
-                Def::Typ(..) => todo!(),
-                Def::Struct => (),
+                Def::Typ | Def::Struct => (),
             }
         });
 
@@ -327,6 +323,7 @@ impl Checker {
     }
 
     fn check_type(&mut self, span: SimpleSpan, expr: &mut Expr) -> Type {
+        // FIXME: Should return `Option<Type>`.
         self.check(span, expr, &Type::Builtin(BuiltinType::Type))
             .unwrap()
     }

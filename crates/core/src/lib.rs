@@ -173,6 +173,16 @@ pub enum Type {
 }
 
 impl Type {
+    fn generic(ret: Self, constrs: Vec<(Ident, Self)>) -> Self {
+        constrs
+            .into_iter()
+            .rfold(ret, |ret, (typ, constr)| Self::Generic {
+                typ,
+                constr: Box::new(constr),
+                ret: Box::new(ret),
+            })
+    }
+
     fn to_expr(&self, span: SimpleSpan) -> Span<Expr> {
         Span::new(
             span,
