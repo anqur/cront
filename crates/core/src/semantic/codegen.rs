@@ -14,6 +14,7 @@ const INCLUDES: &[&str] = &["stdbool.h", "stddef.h", "stdint.h", "assert.h"];
 #[derive(Default)]
 struct Codegen {
     idents: Idents,
+    main: Option<Ident>,
     buf: String,
     level: usize,
 }
@@ -21,6 +22,7 @@ struct Codegen {
 impl Codegen {
     fn generate(mut self, items: Items) -> String {
         self.idents = items.idents;
+        self.main = items.main;
         self.items(items).unwrap();
         self.buf
     }
@@ -38,8 +40,6 @@ impl Codegen {
             writeln!(self.buf)?;
         }
 
-        writeln!(self.buf)?;
-
         for fun in items.fns.into_iter().filter(|f| f.is_concrete()) {
             self.fun_def(fun.item)?;
             writeln!(self.buf)?;
@@ -49,8 +49,7 @@ impl Codegen {
     }
 
     fn fun_sig(&mut self, fun: &FunItem) -> FmtResult {
-        // FIXME: Any better approach?
-        if fun.name.text != "main" {
+        if Some(fun.name) != self.main {
             write!(self.buf, "static ")?;
         }
         self.typ(&fun.ret)?;
@@ -341,8 +340,7 @@ impl Codegen {
         if let Some(b) = Builtin::from_id(i.id) {
             return write!(self.buf, "{b}");
         }
-        // FIXME: Any better approach?
-        if i.text == "main" {
+        if Some(i) == self.main.as_ref() {
             return write!(self.buf, "main");
         }
         write!(self.buf, "{}_{}", i.text, i.id)

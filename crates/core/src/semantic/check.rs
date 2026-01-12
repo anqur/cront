@@ -14,6 +14,7 @@ pub fn check(file: &mut File) -> Result<Items> {
 #[derive(Default)]
 pub struct Items {
     pub(crate) idents: Idents,
+    pub(crate) main: Option<Ident>,
     pub(crate) fns: Vec<Span<FunItem>>,
 }
 
@@ -55,6 +56,7 @@ struct Checker {
 impl Checker {
     fn file(mut self, file: &mut File) -> Result<Items> {
         self.items.idents = file.idents;
+        self.items.main = file.main;
 
         let mut fns = Vec::default();
 
