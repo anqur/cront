@@ -199,10 +199,6 @@ impl Checker {
             .unwrap()
     }
 
-    fn fresh(&mut self, text: &str) -> Ident {
-        self.items.idents.ident(text.into())
-    }
-
     fn builtin(&mut self, b: Builtin) -> Inferred {
         match b {
             Builtin::Assert => Inferred::value(Type::Fun(Box::new(FunType {
@@ -210,7 +206,7 @@ impl Checker {
                 ret: Type::Builtin(BuiltinType::Void),
             }))),
             Builtin::CInt => {
-                let typ = self.fresh("t");
+                let typ = self.items.idents.intermediate("t");
                 Inferred::constr(
                     Type::CType {
                         from: Box::new(Type::Ident(typ)),
@@ -287,8 +283,9 @@ impl Checker {
                 }
                 want
             }
-            Stmt::While(branch) => self.branch(block, branch),
+            Stmt::While { branch, .. } => self.branch(block, branch),
             Stmt::Break | Stmt::Continue => Type::Builtin(BuiltinType::Void),
+            Stmt::Decl { .. } => unreachable!(),
         }
     }
 

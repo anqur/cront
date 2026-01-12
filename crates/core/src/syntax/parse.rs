@@ -24,8 +24,8 @@ impl Idents {
         ident.fresh(self.0);
     }
 
-    pub(crate) fn ident(&mut self, text: Ustr) -> Ident {
-        let mut i = Ident::unbound(text);
+    pub(crate) fn intermediate(&mut self, text: &str) -> Ident {
+        let mut i = Ident::unbound(text.into());
         self.fresh(&mut i);
         i
     }
@@ -206,9 +206,17 @@ pub enum Stmt {
         elif: Vec<Span<Branch>>,
         els: Option<Span<Vec<Span<Self>>>>,
     },
-    While(Branch),
+    While {
+        branch: Branch,
+        exit: Option<Span<Ident>>,
+    },
     Break,
     Continue,
+
+    Decl {
+        name: Span<Ident>,
+        typ: Span<Expr>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -531,7 +539,10 @@ where
                 just(Token::Symbol(Symbol::LBrace)),
                 just(Token::Symbol(Symbol::RBrace)),
             ))
-            .map(|((.., cond), body)| Stmt::While(Branch { cond, body }))
+            .map(|((.., cond), body)| Stmt::While {
+                branch: Branch { cond, body },
+                exit: None,
+            })
             .map_with(Span::from_map_extra)
             .labelled("while statement");
 

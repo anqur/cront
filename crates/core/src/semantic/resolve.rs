@@ -198,9 +198,9 @@ impl Resolver {
                     self.block(Block::default(), &mut els.item);
                 }
             }
-            Stmt::While(b) => self.branch(b),
-            Stmt::Break => (),
-            Stmt::Continue => (),
+            Stmt::While { branch, .. } => self.branch(branch),
+            Stmt::Break | Stmt::Continue => (),
+            Stmt::Decl { .. } => unreachable!(),
         }
     }
 
