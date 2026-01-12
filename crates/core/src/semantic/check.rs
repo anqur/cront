@@ -322,9 +322,8 @@ impl Checker {
     }
 
     fn check_type(&mut self, span: SimpleSpan, expr: &mut Expr) -> Type {
-        // FIXME: Should return `Option<Type>`.
-        self.check(span, expr, &Type::Builtin(BuiltinType::Type))
-            .unwrap()
+        let want = Type::Builtin(BuiltinType::Type);
+        self.check(span, expr, &want).unwrap_or(want)
     }
 
     fn check_args<'a, I: Iterator<Item = &'a mut Span<Expr>>>(
