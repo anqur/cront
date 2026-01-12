@@ -10,7 +10,7 @@ pub fn build(file: &Path) {
         .target(target)
         .debug(true)
         .opt_level(3)
-        .std("c11")
+        .std("c89")
         .get_compiler()
         .to_command()
         .arg(file)
