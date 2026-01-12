@@ -35,6 +35,7 @@ impl Codegen {
         for fun in items.fns.iter().filter(|f| f.is_concrete()) {
             self.fun_sig(&fun.item)?;
             writeln!(self.buf, ";")?;
+            writeln!(self.buf)?;
         }
 
         writeln!(self.buf)?;
@@ -237,37 +238,37 @@ impl Codegen {
         lifted: &mut Vec<Span<Stmt>>,
     ) {
         match expr {
-            Expr::BinaryOp { lhs, typ, rhs, .. } => {
+            Expr::BinaryOp { lhs, rhs, .. } => {
                 self.lift_expr(span, depth + 1, &mut lhs.item, lifted);
                 self.lift_expr(span, depth + 1, &mut rhs.item, lifted);
-                if depth > 0 {
-                    self.replace_expr(span, typ.as_deref().cloned(), expr, lifted);
-                }
             }
-            Expr::Call { callee, args, typ } => {
+            Expr::Call { callee, args, .. } => {
                 self.lift_expr(callee.span, depth + 1, &mut callee.item, lifted);
                 args.iter_mut()
                     .for_each(|x| self.lift_expr(span, depth + 1, &mut x.item, lifted));
-                let typ = typ.as_deref().unwrap();
-                if depth > 0 && !matches!(&typ.item, Expr::BuiltinType(BuiltinType::Void)) {
-                    // Only lift non-void function calls.
-                    self.replace_expr(span, Some(typ.clone()), expr, lifted);
-                }
             }
-
             Expr::Object(..) => todo!(),
             Expr::Access(..) => todo!(),
             Expr::Method { .. } => todo!(),
 
-            Expr::Ident(..) => (),
-            Expr::BuiltinType(..) => (),
-            Expr::Apply(..) => (),
-            Expr::RefType(..) => (),
-            Expr::ArrayType { .. } => (),
-            Expr::Integer(..) => (),
-            Expr::Float(..) => {}
-            Expr::String(..) => {}
-            Expr::Boolean(..) => {}
+            Expr::Ident(..)
+            | Expr::BuiltinType(..)
+            | Expr::Apply(..)
+            | Expr::RefType(..)
+            | Expr::ArrayType { .. }
+            | Expr::Integer(..)
+            | Expr::Float(..)
+            | Expr::String(..)
+            | Expr::Boolean(..) => (),
+        }
+
+        if depth > 0
+            && let Expr::BinaryOp { typ, .. } | Expr::Call { typ, .. } = expr
+            && let Some(typ) = typ.as_deref()
+            && !matches!(&typ.item, Expr::BuiltinType(BuiltinType::Void))
+        {
+            // Only lift non-void expressions.
+            self.replace_expr(span, Some(typ.clone()), expr, lifted);
         }
     }
 
