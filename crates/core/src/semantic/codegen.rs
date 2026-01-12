@@ -290,11 +290,11 @@ impl Codegen {
     }
 
     fn fresh_lifted(&mut self, span: SimpleSpan) -> Span<Ident> {
-        self.fresh(span, "__lifted")
+        self.fresh(span, "lifted")
     }
 
     fn fresh_exit(&mut self, span: SimpleSpan) -> Span<Ident> {
-        self.fresh(span, "__exit")
+        self.fresh(span, "exit")
     }
 
     fn fresh(&mut self, span: SimpleSpan, name: &str) -> Span<Ident> {
