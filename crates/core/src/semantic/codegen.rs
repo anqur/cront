@@ -40,9 +40,12 @@ impl Codegen {
             writeln!(self.buf)?;
         }
 
-        for fun in items.fns.into_iter().filter(|f| f.is_concrete()) {
+        let mut it = items.fns.into_iter().filter(|f| f.is_concrete()).peekable();
+        while let Some(fun) = it.next() {
             self.fun_def(fun.item)?;
-            writeln!(self.buf)?;
+            if it.peek().is_some() {
+                writeln!(self.buf)?;
+            }
         }
 
         Ok(())
