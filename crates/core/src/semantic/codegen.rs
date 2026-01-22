@@ -65,7 +65,7 @@ impl Codegen {
         self.fun_sig(&fun)?;
         writeln!(self.buf)?;
         writeln!(self.buf, "{{")?;
-        let stmts = Lifter::new(&mut self.idents).lift(fun.body);
+        let stmts = Lower::new(&mut self.idents).lower(fun.body);
         self.with_block(|s| stmts.into_iter().try_for_each(|stmt| s.stmt(stmt)))?;
         writeln!(self.buf, "}}")
     }
@@ -265,12 +265,12 @@ impl Codegen {
     }
 }
 
-struct Lifter<'a> {
+struct Lower<'a> {
     idents: &'a mut Idents,
     decls: Vec<Span<Stmt>>,
 }
 
-impl<'a> Lifter<'a> {
+impl<'a> Lower<'a> {
     fn new(idents: &'a mut Idents) -> Self {
         Self {
             idents,
@@ -278,7 +278,7 @@ impl<'a> Lifter<'a> {
         }
     }
 
-    fn lift(mut self, stmts: Vec<Span<Stmt>>) -> Vec<Span<Stmt>> {
+    fn lower(mut self, stmts: Vec<Span<Stmt>>) -> Vec<Span<Stmt>> {
         let stmts = self.stmts(stmts);
         self.decls.extend(stmts);
         self.decls

@@ -60,7 +60,7 @@ impl<T> Span<T> {
     }
 }
 
-#[derive(Default, Debug, Copy, Clone, Eq, PartialEq, EnumString, Display)]
+#[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, EnumString, Display)]
 pub enum BuiltinType {
     #[default]
     Void,
@@ -151,7 +151,7 @@ pub enum Float {
     F64(f64),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Type {
     Builtin(BuiltinType),
     Fun(Box<FunType>),
@@ -221,7 +221,7 @@ impl Display for Type {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct FunType {
     params: Vec<Type>,
     ret: Type,

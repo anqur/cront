@@ -22,7 +22,11 @@ fn it_resolves() {
     }
 }
 
-const CHECK_TEXTS: &[&str] = &[include_str!("factorial.cront")];
+const CHECK_TEXTS: &[&str] = &[
+    include_str!("factorial.cront"),
+    // TODO
+    //include_str!("generic.cront"),
+];
 
 #[test]
 fn it_checks() {
