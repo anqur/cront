@@ -20,14 +20,14 @@ pub struct Items {
 
 #[derive(Clone)]
 struct Inferred {
-    lhs: Option<Type>,
+    lhs: Type,
     rhs: Type,
 }
 
 impl Inferred {
     fn constr(typ: Type, constr: Type) -> Self {
         Self {
-            lhs: Some(typ),
+            lhs: typ,
             rhs: constr,
         }
     }
@@ -38,7 +38,7 @@ impl Inferred {
 
     fn value(typ: Type) -> Self {
         Self {
-            lhs: None,
+            lhs: Type::NoneOrErr,
             rhs: typ,
         }
     }
@@ -74,13 +74,7 @@ impl Checker {
                     if file.main.as_ref() == Some(&fun.name.item) {
                         self.check_arity(fun.name.span, fun.params.len(), 0);
                         if !matches!(ctx.ret, Type::CType { to, .. } if to == "int") {
-                            self.errs.push(Span::new(
-                                span,
-                                CheckErr::TypeMismatch {
-                                    got: ctx.ret.to_string(),
-                                    want: "CInt".to_string(),
-                                },
-                            ))
+                            self.type_mismatch_msg(span, &ctx.ret, "CInt".to_string());
                         }
                     }
                     fns.push(ctx);
@@ -298,14 +292,14 @@ impl Checker {
         self.block(block.local(), &mut branch.body)
     }
 
-    fn check(&mut self, span: SimpleSpan, expr: &mut Expr, want: &Type) -> Option<Type> {
+    fn check(&mut self, span: SimpleSpan, expr: &mut Expr, want: &Type) -> Type {
         if let Expr::Integer(Integer::I64(n)) = expr
             && let Some(t) = want.to_builtin()
             && t.is_integer()
             && let Some(n) = t.narrow_integer(*n)
         {
             *expr = Expr::Integer(n);
-            return None;
+            return Type::NoneOrErr;
         }
 
         if let Expr::Float(Float::F64(n)) = expr
@@ -313,7 +307,7 @@ impl Checker {
             && t.is_float()
         {
             *expr = Expr::Float(t.narrow_float(*n));
-            return None;
+            return Type::NoneOrErr;
         }
 
         let got = self.infer(span, expr);
@@ -323,7 +317,7 @@ impl Checker {
 
     fn check_type(&mut self, span: SimpleSpan, expr: &mut Expr) -> Type {
         let want = Type::Builtin(BuiltinType::Type);
-        self.check(span, expr, &want).unwrap_or(want)
+        self.check(span, expr, &want)
     }
 
     fn check_args<'a, I: Iterator<Item = &'a mut Span<Expr>>>(
@@ -358,10 +352,7 @@ impl Checker {
         {
             self.check(rhs.span, &mut rhs.item, &got);
         } else {
-            self.errs.push(lhs.with(CheckErr::TypeMismatch {
-                got: got.to_string(),
-                want: "number".to_string(),
-            }));
+            self.type_mismatch_msg(lhs.span, &got, "number".to_string());
         }
         *typ = Some(Box::new(got.to_expr(lhs.span)));
         got
@@ -381,36 +372,29 @@ impl Checker {
                     let got = self.infer(len.span, &mut len.item).rhs;
                     if !matches!(got, Type::Builtin(b) if b.is_unsigned_integer()) {
                         // TODO: Should be a compile-time constant.
-                        self.errs.push(len.with(CheckErr::TypeMismatch {
-                            got: got.to_string(),
-                            want: "number".to_string(),
-                        }));
+                        self.type_mismatch_msg(len.span, &got, "number".to_string());
                     }
                     Box::new(got)
                 });
                 return Inferred::typ(Type::Array { elem, len });
             }
             Expr::Apply(t, args) => {
-                let Inferred { lhs, rhs } = self.infer(t.span, &mut t.item);
+                let Inferred { mut lhs, rhs } = self.infer(t.span, &mut t.item);
                 let Type::Generic {
                     typ,
                     constr,
                     mut ret,
                 } = rhs
                 else {
-                    self.errs.push(t.with(CheckErr::TypeMismatch {
-                        got: rhs.to_string(),
-                        want: "generic".to_string(),
-                    }));
+                    self.type_mismatch_msg(t.span, &rhs, "generic".to_string());
                     return Inferred::value(rhs);
                 };
-                let mut body = lhs.unwrap();
                 args.iter_mut().for_each(|arg| {
-                    let arg = self.check(arg.span, &mut arg.item, &constr).unwrap();
-                    body.apply(typ, arg.clone());
+                    let arg = self.check(arg.span, &mut arg.item, &constr);
+                    lhs.apply(typ, arg.clone());
                     ret.apply(typ, arg);
                 });
-                return Inferred::constr(body, *ret);
+                return Inferred::constr(lhs, *ret);
             }
             Expr::Integer(n) => {
                 debug_assert!(matches!(n, Integer::I64(..)));
@@ -493,13 +477,24 @@ impl Checker {
             (Type::CType { from: a, to: x }, Type::CType { from: b, to: y }) if x == y => {
                 self.isa(span, a, b)
             }
-            _ => {
-                let got = got.to_string();
-                let want = want.to_string();
-                self.errs
-                    .push(Span::new(span, CheckErr::TypeMismatch { got, want }));
-            }
+            _ => self.type_mismatch(span, got, want),
         }
+    }
+
+    fn type_mismatch(&mut self, span: SimpleSpan, got: &Type, want: &Type) {
+        if matches!(want, Type::NoneOrErr) {
+            return;
+        }
+        self.type_mismatch_msg(span, got, want.to_string());
+    }
+
+    fn type_mismatch_msg(&mut self, span: SimpleSpan, got: &Type, want: String) {
+        if matches!(got, Type::NoneOrErr) {
+            return;
+        }
+        let got = got.to_string();
+        self.errs
+            .push(Span::new(span, CheckErr::TypeMismatch { got, want }))
     }
 }
 
@@ -541,7 +536,7 @@ struct Applier(HashMap<Ident, Type>);
 impl Applier {
     fn apply(&mut self, t: &mut Type) {
         match t {
-            Type::Builtin(..) => (),
+            Type::NoneOrErr | Type::Builtin(..) => (),
             Type::Fun(f) => {
                 f.params.iter_mut().for_each(|p| self.apply(p));
                 self.apply(&mut f.ret);

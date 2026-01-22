@@ -153,6 +153,8 @@ pub enum Float {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Type {
+    /// No type information, i.e., it's just a value, or it's an error propagated from a failed typecheck somewhere.
+    NoneOrErr,
     Builtin(BuiltinType),
     Fun(Box<FunType>),
     Ref(Box<Self>),
@@ -207,6 +209,7 @@ impl Type {
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
+            Self::NoneOrErr => unreachable!(),
             Self::Builtin(t) => write!(f, "{t}"),
             Self::Fun(t) => write!(f, "{t}"),
             Self::Ref(t) => write!(f, "&{t}"),

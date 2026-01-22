@@ -95,6 +95,7 @@ impl Codegen {
 
     fn typ(&mut self, typ: &Type) -> FmtResult {
         match typ {
+            Type::NoneOrErr => unreachable!(),
             Type::Builtin(b) => self.builtin_type(b),
             Type::Fun(..) => todo!(),
             Type::Ref(t) => {
