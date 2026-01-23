@@ -51,6 +51,7 @@ struct Checker {
     locals: HashMap<Ident, Type>,
     items: Items,
     errs: Vec<Span<CheckErr>>,
+    mono: HashMap<Ident, HashMap<Vec<Type>, Ident>>,
 }
 
 impl Checker {
@@ -115,6 +116,11 @@ impl Checker {
         });
 
         if self.errs.is_empty() {
+            self.items.fns.iter_mut().for_each(|f| {
+                if let Some(mono) = self.mono.remove(&f.item.name) {
+                    f.item.mono = mono.into_iter().collect();
+                }
+            });
             Ok(self.items)
         } else {
             Err(Error::Check(self.errs))
@@ -145,6 +151,7 @@ impl Checker {
             params,
             ret,
             body: Default::default(),
+            mono: Default::default(),
         }
     }
 
@@ -392,12 +399,25 @@ impl Checker {
                     self.type_mismatch_msg(t.span, &rhs, "generic".to_string());
                     return Inferred::value(rhs);
                 };
-                args.iter_mut().for_each(|arg| {
-                    // FIXME: Constraint checking.
-                    let arg = self.check_type(arg.span, &mut arg.item);
-                    lhs.apply(typ, arg.clone());
-                    ret.apply(typ, arg);
-                });
+                let types = args
+                    .iter_mut()
+                    .map(|arg| {
+                        // FIXME: Constraint checking.
+                        let arg = self.check_type(arg.span, &mut arg.item);
+                        lhs.apply(typ, arg.clone());
+                        ret.apply(typ, arg.clone());
+                        arg
+                    })
+                    .collect();
+                if let Type::Fun(..) = lhs
+                    && let Expr::Ident(name) = &mut t.item
+                {
+                    let mono = self.mono.entry(*name).or_default();
+                    mono.entry(types).or_insert_with(|| {
+                        self.items.idents.fresh(name);
+                        *name
+                    });
+                }
                 return Inferred::constr(lhs, *ret);
             }
             Expr::Integer(n) => {
@@ -411,24 +431,18 @@ impl Checker {
             Expr::String(..) => Type::Builtin(BuiltinType::Str),
             Expr::Boolean(..) => Type::Builtin(BuiltinType::Bool),
             Expr::Call { callee, args, typ } => {
-                let got = match self.infer(callee.span, &mut callee.item).rhs {
+                let ret = match self.infer(callee.span, &mut callee.item).rhs {
                     Type::Fun(typ) => {
                         self.check_args(span, args.len(), args.iter_mut(), &typ.params);
                         typ.ret
                     }
                     got => {
-                        self.errs.push(Span::new(
-                            span,
-                            CheckErr::TypeMismatch {
-                                got: got.to_string(),
-                                want: "function".to_string(),
-                            },
-                        ));
+                        self.type_mismatch_msg(span, &got, "function".to_string());
                         got
                     }
                 };
-                *typ = Some(Box::new(got.to_expr(span)));
-                got
+                *typ = Some(Box::new(ret.to_expr(span)));
+                ret
             }
             Expr::BinaryOp { lhs, op, typ, rhs } => match op {
                 Symbol::EqEq => {
@@ -508,11 +522,15 @@ pub(crate) struct FunItem {
     pub(crate) params: Vec<(Ident, Type)>,
     pub(crate) ret: Type,
     pub(crate) body: Vec<Span<Stmt>>,
+    pub(crate) mono: Vec<(Vec<Type>, Ident)>,
 }
 
-impl Span<FunItem> {
-    pub(crate) fn is_concrete(&self) -> bool {
-        self.item.constrs.is_empty()
+impl FunItem {
+    pub(crate) fn mono_env(&self, types: &[Type]) -> impl Iterator<Item = (Ident, Type)> {
+        self.constrs
+            .iter()
+            .map(|(name, ..)| *name)
+            .zip(types.iter().cloned())
     }
 }
 

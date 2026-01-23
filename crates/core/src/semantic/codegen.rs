@@ -2,8 +2,9 @@ use crate::semantic::check::{FunItem, Items};
 use crate::syntax::parse::{Builtin, Expr, Ident, Idents, Stmt};
 use crate::{BuiltinType, Span, Type};
 use chumsky::prelude::SimpleSpan;
+use std::collections::HashMap;
 use std::fmt::{Result as FmtResult, Write};
-use std::mem::replace;
+use std::mem::{replace, take};
 
 pub fn generate(items: Items) -> String {
     Codegen::default().generate(items)
@@ -17,6 +18,7 @@ struct Codegen {
     main: Option<Ident>,
     buf: String,
     level: usize,
+    mono: HashMap<Ident, Type>,
 }
 
 impl Codegen {
@@ -34,15 +36,29 @@ impl Codegen {
 
         writeln!(self.buf)?;
 
-        for fun in items.fns.iter().filter(|f| f.is_concrete()) {
-            self.fun_sig(&fun.item)?;
-            writeln!(self.buf, ";")?;
+        for fun in items.fns.iter() {
+            if fun.item.constrs.is_empty() {
+                self.fun_sig(&fun.item, None, true)?;
+            } else {
+                for (types, name) in &fun.item.mono {
+                    let env = fun.item.mono_env(types);
+                    self.with_mono(env, |s| s.fun_sig(&fun.item, Some(name), true))?;
+                }
+            }
             writeln!(self.buf)?;
         }
 
-        let mut it = items.fns.into_iter().filter(|f| f.is_concrete()).peekable();
-        while let Some(fun) = it.next() {
-            self.fun_def(fun.item)?;
+        let mut it = items.fns.into_iter().peekable();
+        while let Some(mut fun) = it.next() {
+            let stmts = Lower::new(&mut self.idents).lower(take(&mut fun.item.body));
+            if fun.item.constrs.is_empty() {
+                self.fun_def(&fun.item, None, &stmts)?;
+            } else {
+                for (types, name) in &fun.item.mono {
+                    let env = fun.item.mono_env(types);
+                    self.with_mono(env, |s| s.fun_def(&fun.item, Some(*name), &stmts))?;
+                }
+            }
             if it.peek().is_some() {
                 writeln!(self.buf)?;
             }
@@ -51,22 +67,25 @@ impl Codegen {
         Ok(())
     }
 
-    fn fun_sig(&mut self, fun: &FunItem) -> FmtResult {
+    fn fun_sig(&mut self, fun: &FunItem, name: Option<&Ident>, trailing_semi: bool) -> FmtResult {
         if Some(fun.name) != self.main {
             write!(self.buf, "static ")?;
         }
         self.typ(&fun.ret)?;
         writeln!(self.buf)?;
-        self.ident(&fun.name)?;
-        self.params(&fun.params)
+        self.ident(name.unwrap_or(&fun.name))?;
+        self.params(&fun.params)?;
+        if trailing_semi {
+            writeln!(self.buf, ";")?;
+        }
+        Ok(())
     }
 
-    fn fun_def(&mut self, fun: FunItem) -> FmtResult {
-        self.fun_sig(&fun)?;
+    fn fun_def(&mut self, fun: &FunItem, name: Option<Ident>, body: &[Span<Stmt>]) -> FmtResult {
+        self.fun_sig(fun, name.as_ref(), false)?;
         writeln!(self.buf)?;
         writeln!(self.buf, "{{")?;
-        let stmts = Lower::new(&mut self.idents).lower(fun.body);
-        self.with_block(|s| stmts.into_iter().try_for_each(|stmt| s.stmt(stmt)))?;
+        self.with_block(|s| body.iter().try_for_each(|stmt| s.stmt(stmt)))?;
         writeln!(self.buf, "}}")
     }
 
@@ -129,10 +148,10 @@ impl Codegen {
         })
     }
 
-    fn stmt(&mut self, stmt: Span<Stmt>) -> FmtResult {
-        self.with_indent(|s| match stmt.item {
+    fn stmt(&mut self, stmt: &Span<Stmt>) -> FmtResult {
+        self.with_indent(|s| match &stmt.item {
             Stmt::Expr(e) => {
-                s.expr(&e)?;
+                s.expr(e)?;
                 writeln!(s.buf, ";")
             }
             Stmt::Assign { name, typ, rhs } => {
@@ -159,7 +178,7 @@ impl Codegen {
             }
             Stmt::If { .. } => todo!(),
             Stmt::While { branch, exit } => {
-                let exit = exit.unwrap();
+                let exit = exit.as_ref().unwrap();
 
                 writeln!(s.buf, "do {{")?;
                 s.with_block(|s| {
@@ -169,7 +188,7 @@ impl Codegen {
                         writeln!(s.buf, ") {{")
                     })?;
 
-                    s.with_block(|s| branch.body.into_iter().try_for_each(|stmt| s.stmt(stmt)))?;
+                    s.with_block(|s| branch.body.iter().try_for_each(|stmt| s.stmt(stmt)))?;
 
                     s.with_indent(|s| writeln!(s.buf, "}} else {{"))?;
 
@@ -263,6 +282,17 @@ impl Codegen {
             self.buf.write_char(' ')?;
         }
         f(self)
+    }
+
+    fn with_mono<I, F>(&mut self, env: I, f: F) -> FmtResult
+    where
+        I: Iterator<Item = (Ident, Type)>,
+        F: FnOnce(&mut Self) -> FmtResult,
+    {
+        self.mono.extend(env);
+        f(self)?;
+        self.mono.clear();
+        Ok(())
     }
 }
 
@@ -398,7 +428,7 @@ impl<'a> Lower<'a> {
         expr: &mut Expr,
         lifted: &mut Vec<Span<Stmt>>,
     ) {
-        let name = Span::new(span, self.idents.intermediate("lifted"));
+        let name = Span::new(span, self.idents.intermediate("expr"));
         self.decls.push(Span::new(
             span,
             Stmt::Decl {
