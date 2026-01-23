@@ -1,9 +1,14 @@
-fun add<T>(a: T, b: T) T {
+fun id<T>(a: T) T {
+    return a;
+}
+
+fun add<T: Number>(a: T, b: T) T {
     return a + b;
 }
 
 fun main() CInt<I32> {
-    assert(add<I32>(1, 1) == 2);
-    assert(add<U32>(1, 1) == 2);
+    assert(id<U32>(1) == 1);
+    assert(add<U64>(1, 1) == 2);
+    assert(add<F64>(1.0, 1.0) == 3.0);
     return 0;
 }

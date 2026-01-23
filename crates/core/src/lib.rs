@@ -77,6 +77,7 @@ pub enum BuiltinType {
     F32,
     F64,
     Str,
+    Number,
     Type,
 }
 

@@ -125,7 +125,7 @@ impl Codegen {
             BuiltinType::F32 => "float",
             BuiltinType::F64 => "double",
             BuiltinType::Str => todo!(),
-            BuiltinType::Type => unreachable!(),
+            BuiltinType::Number | BuiltinType::Type => unreachable!(),
         })
     }
 
@@ -204,7 +204,7 @@ impl Codegen {
         match expr {
             Expr::Ident(i) => self.ident(i),
             Expr::BuiltinType(b) => self.builtin_type(b),
-            Expr::Apply(..) => unreachable!(),
+            Expr::Apply(f, ..) => self.expr(&f.item),
             Expr::RefType(..) => unreachable!(),
             Expr::ArrayType { .. } => unreachable!(),
             Expr::Integer(i) => write!(self.buf, "{i}"),

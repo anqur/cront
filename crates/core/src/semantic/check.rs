@@ -185,8 +185,7 @@ impl Checker {
             .or_else(|| {
                 self.constrs
                     .get(ident)
-                    .cloned()
-                    .map(|c| Inferred::constr(Type::Ident(*ident), c))
+                    .map(|_| Inferred::typ(Type::Ident(*ident)))
             })
             .or_else(|| self.globals.get(ident).cloned())
             .or_else(|| Builtin::from_id(ident.id).map(|b| self.builtin(b)))
@@ -347,15 +346,24 @@ impl Checker {
         typ: &mut Option<Box<Span<Expr>>>,
     ) -> Type {
         let got = self.infer(lhs.span, &mut lhs.item).rhs;
-        if let Type::Builtin(t) = got
-            && (t.is_integer() || t.is_float())
-        {
+        if self.is_number_type(&got) {
             self.check(rhs.span, &mut rhs.item, &got);
         } else {
             self.type_mismatch_msg(lhs.span, &got, "number".to_string());
         }
         *typ = Some(Box::new(got.to_expr(lhs.span)));
         got
+    }
+
+    fn is_number_type(&self, got: &Type) -> bool {
+        match got {
+            Type::Builtin(t) => t.is_integer() || t.is_float(),
+            Type::Ident(t) => matches!(
+                self.constrs.get(t),
+                Some(Type::Builtin(BuiltinType::Number))
+            ),
+            _ => false,
+        }
     }
 
     fn infer(&mut self, span: SimpleSpan, expr: &mut Expr) -> Inferred {
@@ -380,17 +388,13 @@ impl Checker {
             }
             Expr::Apply(t, args) => {
                 let Inferred { mut lhs, rhs } = self.infer(t.span, &mut t.item);
-                let Type::Generic {
-                    typ,
-                    constr,
-                    mut ret,
-                } = rhs
-                else {
+                let Type::Generic { typ, mut ret, .. } = rhs else {
                     self.type_mismatch_msg(t.span, &rhs, "generic".to_string());
                     return Inferred::value(rhs);
                 };
                 args.iter_mut().for_each(|arg| {
-                    let arg = self.check(arg.span, &mut arg.item, &constr);
+                    // FIXME: Constraint checking.
+                    let arg = self.check_type(arg.span, &mut arg.item);
                     lhs.apply(typ, arg.clone());
                     ret.apply(typ, arg);
                 });

@@ -24,8 +24,7 @@ fn it_resolves() {
 
 const CHECK_TEXTS: &[&str] = &[
     include_str!("factorial.cront"),
-    // TODO
-    //include_str!("generic.cront"),
+    include_str!("generic.cront"),
 ];
 
 #[test]
@@ -37,7 +36,10 @@ fn it_checks() {
     }
 }
 
-const GENERATION_TEXTS: &[&str] = &[include_str!("factorial.cront")];
+const GENERATION_TEXTS: &[&str] = &[
+    include_str!("factorial.cront"),
+    include_str!("generic.cront"),
+];
 
 #[test]
 fn it_generates() {
@@ -48,7 +50,11 @@ fn it_generates() {
     }
 }
 
-const BUILD_FILES: &[&str] = &["factorial.cront"];
+const BUILD_FILES: &[&str] = &[
+    "factorial.cront",
+    // TODO: Monomorphization.
+    //"generic.cront",
+];
 
 #[test]
 fn it_builds() {
