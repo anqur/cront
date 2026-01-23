@@ -9,4 +9,4 @@ num_enum = "0.7.5"
 ustr = "1.1.0"
 chumsky = { version = "1.0.0-alpha.8", features = ["pratt"] }
 serde_json = "1.0.149"
-cc = "1.2.52"
+cc = "1.2.53"
