@@ -8,8 +8,7 @@ fun add<T: Number>(a: T, b: T) T {
 
 fun main() CInt<I32> {
     assert(id<U32>(1) == 1);
-    // FIXME
-    //assert(id<U32>(2) == 2);
+    assert(id<U32>(2) == 2);
     assert(add<U64>(1, 1) == 2);
     assert(add<F64>(1.0, 1.0) == 2.0);
     return 0;

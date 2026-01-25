@@ -5,6 +5,7 @@ use crate::syntax::parse::{
 use crate::{BuiltinType, CheckErr, Error, Float, FunType, Integer, Result, Span, Type};
 use chumsky::prelude::SimpleSpan;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::mem::take;
 
 pub fn check(file: &mut File) -> Result<Items> {
@@ -413,10 +414,13 @@ impl Checker {
                     && let Expr::Ident(name) = &mut t.item
                 {
                     let mono = self.mono.entry(*name).or_default();
-                    mono.entry(types).or_insert_with(|| {
-                        self.items.idents.fresh(name);
-                        *name
-                    });
+                    match mono.entry(types) {
+                        Entry::Occupied(found) => *name = *found.get(),
+                        Entry::Vacant(entry) => {
+                            self.items.idents.fresh(name);
+                            entry.insert(*name);
+                        }
+                    }
                 }
                 return Inferred::constr(lhs, *ret);
             }
