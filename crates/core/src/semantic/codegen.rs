@@ -123,7 +123,7 @@ impl Codegen {
             }
             Type::Array { .. } => todo!(),
             Type::Generic { .. } => unreachable!(),
-            Type::Ident(..) => unreachable!(),
+            Type::Ident(t) => self.typ(&self.mono.get(t).unwrap().clone()),
             Type::CType { to, .. } => write!(self.buf, "{to}"),
         }
     }

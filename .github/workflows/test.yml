@@ -24,3 +24,7 @@ jobs:
         run: cargo clippy --all --no-deps -- -D warnings
       - name: Run tests
         run: cargo test --verbose
+      - name: Run C tests
+        run: |
+          ls -l crates/core/src/tests/*.out
+          for f in crates/core/src/tests/*.out; do "$f"; done
