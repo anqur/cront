@@ -3,7 +3,11 @@ use crate::{build, check, generate, resolve};
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
 
-const PARSE_TEXTS: &[&str] = &[include_str!("println.cront"), include_str!("vector.cront")];
+const PARSE_TEXTS: &[&str] = &[
+    include_str!("println.cront"),
+    include_str!("vector.cront"),
+    include_str!("struct.cront"),
+];
 
 #[test]
 fn it_parses() {

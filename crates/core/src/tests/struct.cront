@@ -1,0 +1,11 @@
+struct Data<T> {
+    n: T;
+    m: I32;
+}
+
+fun main() CInt<I32> {
+    let a = Data<U32>{n = 42, m = 69};
+    assert(a.n == 42);
+    assert(a.m == 69);
+    return 0;
+}
