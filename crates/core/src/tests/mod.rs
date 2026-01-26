@@ -40,6 +40,7 @@ fn it_resolves() {
 const CHECK_TEXTS: &[&str] = &[
     include_str!("factorial.cront"),
     include_str!("generic.cront"),
+    include_str!("struct.cront"),
 ];
 
 #[test]
@@ -83,6 +84,7 @@ fn it_builds() {
 #[test]
 #[ignore]
 fn it_runs() {
+    let mut found = false;
     test_dir()
         .read_dir()
         .unwrap()
@@ -96,7 +98,8 @@ fn it_runs() {
             None
         })
         .for_each(|f| {
-            eprintln!("Running {}", f.display());
+            found = true;
             assert!(Command::new(f).spawn().unwrap().wait().unwrap().success())
         });
+    assert!(found);
 }

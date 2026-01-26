@@ -25,4 +25,4 @@ jobs:
       - name: Run tests
         run: |
           cargo test --verbose
-          cargo test -- --ignored --show-output
+          cargo test -- --ignored

@@ -114,7 +114,7 @@ impl Codegen {
 
     fn typ(&mut self, typ: &Type) -> FmtResult {
         match typ {
-            Type::NoneOrErr => unreachable!(),
+            Type::Unknown => unreachable!(),
             Type::Builtin(b) => self.builtin_type(b),
             Type::Fun(..) => todo!(),
             Type::Ref(t) => {
@@ -125,6 +125,10 @@ impl Codegen {
             Type::Generic { .. } => unreachable!(),
             Type::Ident(t) => self.typ(&self.mono.get(t).unwrap().clone()),
             Type::CType { to, .. } => write!(self.buf, "{to}"),
+            Type::Struct(i) => {
+                write!(self.buf, "struct ")?;
+                self.ident(i)
+            }
         }
     }
 

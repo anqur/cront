@@ -1,6 +1,6 @@
 use crate::syntax::lex::Symbol;
 use crate::syntax::parse::{
-    Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Sig, Stmt,
+    Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Member, Sig, Stmt,
 };
 use crate::{BuiltinType, CheckErr, Error, Float, FunType, Integer, Result, Span, Type};
 use chumsky::prelude::SimpleSpan;
@@ -39,7 +39,7 @@ impl Inferred {
 
     fn value(typ: Type) -> Self {
         Self {
-            lhs: Type::NoneOrErr,
+            lhs: Type::Unknown,
             rhs: typ,
         }
     }
@@ -72,7 +72,7 @@ impl Checker {
                         params: ctx.params.iter().map(|(.., typ)| typ.clone()).collect(),
                         ret: ctx.ret.clone(),
                     }));
-                    let got = Type::generic(f.clone(), ctx.constrs.clone());
+                    let got = Type::generic(ctx.constrs.clone(), f.clone());
                     if file.main.as_ref() == Some(&fun.name.item) {
                         self.check_arity(fun.name.span, fun.params.len(), 0);
                         if !matches!(ctx.ret, Type::CType { to, .. } if to == "int") {
@@ -83,12 +83,34 @@ impl Checker {
                     self.globals.insert(fun.name.item, Inferred::constr(f, got));
                 }
                 Sig::Typ { name, constrs, typ } => {
-                    let typ = self.check_type(typ.span, &mut typ.item);
                     let constrs = self.constrs(constrs);
-                    let got = Type::generic(Type::Builtin(BuiltinType::Type), constrs);
+                    let typ =
+                        self.with_constrs(&constrs, |s| s.check_type(typ.span, &mut typ.item));
+                    let got = Type::generic(constrs, Type::Builtin(BuiltinType::Type));
                     self.globals.insert(name.item, Inferred::constr(typ, got));
                 }
-                Sig::Struct { .. } => todo!(),
+                Sig::Struct {
+                    name,
+                    constrs,
+                    members,
+                    optional,
+                } => {
+                    let constrs = self.constrs(constrs);
+                    let typ = Type::Struct(name.item);
+                    self.with_constrs(&constrs, |s| {
+                        members.iter_mut().for_each(|m| {
+                            match m.inner_mut() {
+                                Member::Data(p) => s.check_type(p.typ.span, &mut p.typ.item),
+                                Member::Type(c) => s.check_type(c.constr.span, &mut c.constr.item),
+                            };
+                        });
+                        if let Some(optional) = optional {
+                            s.check_type(optional.span, &mut optional.inner_mut().typ.item);
+                        }
+                    });
+                    let got = Type::generic(constrs, Type::Builtin(BuiltinType::Type));
+                    self.globals.insert(name.item, Inferred::constr(typ, got));
+                }
             }
         });
 
@@ -306,7 +328,7 @@ impl Checker {
             && let Some(n) = t.narrow_integer(*n)
         {
             *expr = Expr::Integer(n);
-            return Type::NoneOrErr;
+            return Type::Unknown;
         }
 
         if let Expr::Float(Float::F64(n)) = expr
@@ -314,7 +336,7 @@ impl Checker {
             && t.is_float()
         {
             *expr = Expr::Float(t.narrow_float(*n));
-            return Type::NoneOrErr;
+            return Type::Unknown;
         }
 
         let got = self.infer(span, expr);
@@ -495,7 +517,7 @@ impl Checker {
                 self.isa(span, a, b);
                 self.isa(span, x, y)
             }
-            (Type::Ident(a), Type::Ident(b)) if a == b => (),
+            (Type::Ident(a), Type::Ident(b)) | (Type::Struct(a), Type::Struct(b)) if a == b => (),
             (Type::CType { from: a, to: x }, Type::CType { from: b, to: y }) if x == y => {
                 self.isa(span, a, b)
             }
@@ -504,14 +526,14 @@ impl Checker {
     }
 
     fn type_mismatch(&mut self, span: SimpleSpan, got: &Type, want: &Type) {
-        if matches!(want, Type::NoneOrErr) {
+        if matches!(want, Type::Unknown) {
             return;
         }
         self.type_mismatch_msg(span, got, want.to_string());
     }
 
     fn type_mismatch_msg(&mut self, span: SimpleSpan, got: &Type, want: String) {
-        if matches!(got, Type::NoneOrErr) {
+        if matches!(got, Type::Unknown) {
             return;
         }
         let got = got.to_string();
@@ -562,7 +584,7 @@ struct Applier(HashMap<Ident, Type>);
 impl Applier {
     fn apply(&mut self, t: &mut Type) {
         match t {
-            Type::NoneOrErr | Type::Builtin(..) => (),
+            Type::Unknown | Type::Builtin(..) | Type::Struct(..) => (),
             Type::Fun(f) => {
                 f.params.iter_mut().for_each(|p| self.apply(p));
                 self.apply(&mut f.ret);

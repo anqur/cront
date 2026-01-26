@@ -154,8 +154,8 @@ pub enum Float {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Type {
-    /// No type information, i.e., it's just a value, or it's an error propagated from a failed typecheck somewhere.
-    NoneOrErr,
+    /// I.e., it's just a value, or it's an error propagated from a failed typecheck somewhere.
+    Unknown,
     Builtin(BuiltinType),
     Fun(Box<FunType>),
     Ref(Box<Self>),
@@ -173,10 +173,11 @@ pub enum Type {
         from: Box<Self>,
         to: &'static str,
     },
+    Struct(Ident),
 }
 
 impl Type {
-    fn generic(ret: Self, constrs: Vec<(Ident, Self)>) -> Self {
+    fn generic(constrs: Vec<(Ident, Self)>, ret: Self) -> Self {
         constrs
             .into_iter()
             .rfold(ret, |ret, (typ, constr)| Self::Generic {
@@ -210,7 +211,7 @@ impl Type {
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Self::NoneOrErr => unreachable!(),
+            Self::Unknown => unreachable!(),
             Self::Builtin(t) => write!(f, "{t}"),
             Self::Fun(t) => write!(f, "{t}"),
             Self::Ref(t) => write!(f, "&{t}"),
@@ -219,7 +220,7 @@ impl Display for Type {
                 Some(len) => write!(f, "[{len}]{elem}"),
             },
             Self::Generic { typ, constr, ret } => write!(f, "({typ}: {constr}) => {ret}"),
-            Self::Ident(i) => write!(f, "{i}"),
+            Self::Ident(i) | Self::Struct(i) => write!(f, "{i}"),
             Self::CType { from, to } => write!(f, "{from} as {to}"),
         }
     }
