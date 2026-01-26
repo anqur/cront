@@ -16,8 +16,8 @@ pub fn check(file: &mut File) -> Result<Items> {
 pub struct Items {
     pub(crate) idents: Idents,
     pub(crate) main: Option<Ident>,
-    pub(crate) fns: Vec<Span<FunItem>>,
-    pub(crate) structs: Vec<Span<StructItem>>,
+    pub(crate) fns: Vec<Span<Item<FunItem>>>,
+    pub(crate) structs: Vec<Span<Item<StructItem>>>,
 }
 
 #[derive(Clone)]
@@ -54,7 +54,7 @@ struct Checker {
     items: Items,
     errs: Vec<Span<CheckErr>>,
     mono: HashMap<Ident, HashMap<Vec<Type>, Ident>>,
-    structs: HashMap<Ident, StructItem>,
+    structs: HashMap<Ident, Item<StructItem>>,
 }
 
 impl Checker {
@@ -72,14 +72,19 @@ impl Checker {
                     let span = fun.ret.as_ref().map(|s| s.span).unwrap_or(span);
                     let item = self.fun(fun);
                     let f = Type::Fun(Box::new(FunType {
-                        params: item.params.iter().map(|(.., typ)| typ.clone()).collect(),
-                        ret: item.ret.clone(),
+                        params: item
+                            .item
+                            .params
+                            .iter()
+                            .map(|(.., typ)| typ.clone())
+                            .collect(),
+                        ret: item.item.ret.clone(),
                     }));
                     let got = Type::generic(item.constrs.clone(), f.clone());
                     if file.main.as_ref() == Some(&fun.name.item) {
                         self.check_arity(fun.name.span, fun.params.len(), 0);
-                        if !matches!(item.ret, Type::CType { to, .. } if to == "int") {
-                            self.type_mismatch_msg(span, &item.ret, "CInt".to_string());
+                        if !matches!(item.item.ret, Type::CType { to, .. } if to == "int") {
+                            self.type_mismatch_msg(span, &item.item.ret, "CInt".to_string());
                         }
                     }
                     fns.push(item);
@@ -133,12 +138,15 @@ impl Checker {
                     self.globals.insert(name.item, Inferred::constr(typ, got));
                     self.structs.insert(
                         name.item,
-                        StructItem {
+                        Item {
                             name: name.item,
                             constrs,
-                            types,
-                            data,
-                            optional,
+                            mono: Default::default(),
+                            item: StructItem {
+                                types,
+                                data,
+                                optional,
+                            },
                         },
                     );
                 }
@@ -155,14 +163,14 @@ impl Checker {
                 Def::Fun(body) => {
                     let mut item = fns.next().unwrap();
                     self.with_constrs(&item.constrs, |s| {
-                        let mut local = Block::func(item.ret.clone());
-                        item.params.clone().into_iter().for_each(|(i, p)| {
+                        let mut local = Block::func(item.item.ret.clone());
+                        item.item.params.clone().into_iter().for_each(|(i, p)| {
                             s.insert(&mut local, i, p);
                         });
                         let got = s.block(local, body);
-                        s.isa(span, &got, &item.ret);
+                        s.isa(span, &got, &item.item.ret);
                     });
-                    item.body = take(body);
+                    item.item.body = take(body);
                     self.items.fns.push(decl.with(item));
                 }
                 Def::Typ | Def::Struct => (),
@@ -186,7 +194,7 @@ impl Checker {
         }
     }
 
-    fn fun(&mut self, fun: &mut Fun) -> FunItem {
+    fn fun(&mut self, fun: &mut Fun) -> Item<FunItem> {
         let name = fun.name.item;
         let constrs = self.constrs(&mut fun.constrs);
         let (params, ret) = self.with_constrs(&constrs, |s| {
@@ -204,13 +212,15 @@ impl Checker {
                     .unwrap_or(Type::Builtin(BuiltinType::Void)),
             )
         });
-        FunItem {
+        Item {
             name,
             constrs,
-            params,
-            ret,
-            body: Default::default(),
             mono: Default::default(),
+            item: FunItem {
+                params,
+                ret,
+                body: Default::default(),
+            },
         }
     }
 
@@ -578,16 +588,14 @@ impl Checker {
     }
 }
 
-pub(crate) struct FunItem {
+pub(crate) struct Item<T> {
     pub(crate) name: Ident,
     pub(crate) constrs: Vec<(Ident, Type)>,
-    pub(crate) params: Vec<(Ident, Type)>,
-    pub(crate) ret: Type,
-    pub(crate) body: Vec<Span<Stmt>>,
     pub(crate) mono: Vec<(Vec<Type>, Ident)>,
+    pub(crate) item: T,
 }
 
-impl FunItem {
+impl<T> Item<T> {
     pub(crate) fn mono_env(&self, types: &[Type]) -> impl Iterator<Item = (Ident, Type)> {
         self.constrs
             .iter()
@@ -596,10 +604,14 @@ impl FunItem {
     }
 }
 
+pub(crate) struct FunItem {
+    pub(crate) params: Vec<(Ident, Type)>,
+    pub(crate) ret: Type,
+    pub(crate) body: Vec<Span<Stmt>>,
+}
+
 #[allow(dead_code)]
 pub(crate) struct StructItem {
-    pub(crate) name: Ident,
-    pub(crate) constrs: Vec<(Ident, Type)>,
     pub(crate) types: HashMap<Ident, Type>,
     pub(crate) data: HashMap<Ident, (Type, usize)>,
     pub(crate) optional: Option<(Ident, Type)>,

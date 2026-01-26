@@ -1,4 +1,4 @@
-use crate::semantic::check::{FunItem, Items};
+use crate::semantic::check::{FunItem, Item, Items};
 use crate::syntax::parse::{Builtin, Expr, Ident, Idents, Stmt};
 use crate::{BuiltinType, Span, Type};
 use chumsky::prelude::SimpleSpan;
@@ -59,7 +59,7 @@ impl Codegen {
 
         let mut it = items.fns.into_iter().peekable();
         while let Some(mut fun) = it.next() {
-            let stmts = Lower::new(&mut self.idents).lower(take(&mut fun.item.body));
+            let stmts = Lower::new(&mut self.idents).lower(take(&mut fun.item.item.body));
             if fun.item.constrs.is_empty() {
                 self.fun_def(&fun.item, None, &stmts)?;
             } else {
@@ -76,21 +76,31 @@ impl Codegen {
         Ok(())
     }
 
-    fn fun_sig(&mut self, fun: &FunItem, name: Option<&Ident>, trailing_semi: bool) -> FmtResult {
+    fn fun_sig(
+        &mut self,
+        fun: &Item<FunItem>,
+        name: Option<&Ident>,
+        trailing_semi: bool,
+    ) -> FmtResult {
         if Some(fun.name) != self.main {
             write!(self.buf, "static ")?;
         }
-        self.typ(&fun.ret)?;
+        self.typ(&fun.item.ret)?;
         writeln!(self.buf)?;
         self.ident(name.unwrap_or(&fun.name))?;
-        self.params(&fun.params)?;
+        self.params(&fun.item.params)?;
         if trailing_semi {
             writeln!(self.buf, ";")?;
         }
         Ok(())
     }
 
-    fn fun_def(&mut self, fun: &FunItem, name: Option<Ident>, body: &[Span<Stmt>]) -> FmtResult {
+    fn fun_def(
+        &mut self,
+        fun: &Item<FunItem>,
+        name: Option<Ident>,
+        body: &[Span<Stmt>],
+    ) -> FmtResult {
         self.fun_sig(fun, name.as_ref(), false)?;
         writeln!(self.buf)?;
         writeln!(self.buf, "{{")?;
