@@ -1,3 +1,7 @@
+struct A {
+    n: U32;
+}
+
 struct Data<T> {
     n: T;
     m: I32;

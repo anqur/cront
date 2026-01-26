@@ -54,7 +54,7 @@ struct Checker {
     items: Items,
     errs: Vec<Span<CheckErr>>,
     mono: HashMap<Ident, HashMap<Vec<Type>, Ident>>,
-    structs: HashMap<Ident, Item<StructItem>>,
+    structs: HashMap<Ident, StructType>,
 }
 
 impl Checker {
@@ -138,15 +138,11 @@ impl Checker {
                     self.globals.insert(name.item, Inferred::constr(typ, got));
                     self.structs.insert(
                         name.item,
-                        Item {
-                            name: name.item,
+                        StructType {
                             constrs,
-                            mono: Default::default(),
-                            item: StructItem {
-                                types,
-                                data,
-                                optional,
-                            },
+                            types,
+                            data,
+                            optional,
                         },
                     );
                 }
@@ -185,7 +181,28 @@ impl Checker {
             });
             self.items.structs = structs
                 .into_iter()
-                .map(|name| name.map(|n| self.structs.remove(&n).unwrap()))
+                .map(|name| {
+                    let StructType {
+                        constrs,
+                        data: data_map,
+                        optional,
+                        ..
+                    } = self.structs.remove(&name.item).unwrap();
+                    let mut data = vec![None; data_map.len()];
+                    for (name, (typ, i)) in data_map {
+                        data[i] = Some((name, typ));
+                    }
+                    let data = data.into_iter().flatten().collect();
+                    Span::new(
+                        name.span,
+                        Item {
+                            name: name.item,
+                            constrs,
+                            mono: Default::default(), // TODO
+                            item: StructItem { data, optional },
+                        },
+                    )
+                })
                 .collect();
             debug_assert!(self.structs.is_empty());
             Ok(self.items)
@@ -610,11 +627,18 @@ pub(crate) struct FunItem {
     pub(crate) body: Vec<Span<Stmt>>,
 }
 
-#[allow(dead_code)]
 pub(crate) struct StructItem {
-    pub(crate) types: HashMap<Ident, Type>,
-    pub(crate) data: HashMap<Ident, (Type, usize)>,
+    pub(crate) data: Vec<(Ident, Type)>,
+    #[allow(dead_code)]
     pub(crate) optional: Option<(Ident, Type)>,
+}
+
+struct StructType {
+    constrs: Vec<(Ident, Type)>,
+    #[allow(dead_code)]
+    types: HashMap<Ident, Type>,
+    data: HashMap<Ident, (Type, usize)>,
+    optional: Option<(Ident, Type)>,
 }
 
 struct Block {

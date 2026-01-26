@@ -37,15 +37,14 @@ impl Codegen {
         writeln!(self.buf)?;
 
         let mut has_structs = false;
-        for s in &items.structs {
-            // TODO: Member definitions.
-            if s.item.constrs.is_empty() {
+        for st in &items.structs {
+            if st.item.constrs.is_empty() {
                 has_structs = true;
                 write!(self.buf, "struct ")?;
-                self.ident(&s.item.name)?;
+                self.ident(&st.item.name)?;
                 writeln!(self.buf, ";")?;
             } else {
-                for (.., name) in &s.item.mono {
+                for (.., name) in &st.item.mono {
                     has_structs = true;
                     write!(self.buf, "struct ")?;
                     self.ident(name)?;
@@ -53,7 +52,30 @@ impl Codegen {
                 }
             }
         }
-
+        if has_structs {
+            writeln!(self.buf)?;
+        }
+        for st in items.structs {
+            if st.item.constrs.is_empty() {
+                write!(self.buf, "struct ")?;
+                self.ident(&st.item.name)?;
+                writeln!(self.buf, " {{")?;
+                self.with_block(|s| {
+                    for (name, typ) in st.item.item.data {
+                        s.with_indent(|s| {
+                            s.typ(&typ)?;
+                            write!(s.buf, " ")?;
+                            writeln!(s.buf, "{};", name.text)
+                        })?;
+                    }
+                    // TODO: Optional data member.
+                    Ok(())
+                })?;
+                writeln!(self.buf, "}};")?;
+            } else {
+                // TODO: Monomorphization.
+            }
+        }
         if has_structs {
             writeln!(self.buf)?;
         }
