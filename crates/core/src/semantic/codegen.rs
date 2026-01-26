@@ -36,14 +36,27 @@ impl Codegen {
 
         writeln!(self.buf)?;
 
+        let mut has_structs = false;
         for s in &items.structs {
-            // TODO: Monomorphization, and member definitions.
-            write!(self.buf, "struct ")?;
-            self.ident(&s.item.name)?;
-            writeln!(self.buf, ";")?;
+            // TODO: Member definitions.
+            if s.item.constrs.is_empty() {
+                has_structs = true;
+                write!(self.buf, "struct ")?;
+                self.ident(&s.item.name)?;
+                writeln!(self.buf, ";")?;
+            } else {
+                for (.., name) in &s.item.mono {
+                    has_structs = true;
+                    write!(self.buf, "struct ")?;
+                    self.ident(name)?;
+                    writeln!(self.buf, ";")?;
+                }
+            }
         }
 
-        writeln!(self.buf)?;
+        if has_structs {
+            writeln!(self.buf)?;
+        }
 
         for fun in &items.fns {
             if fun.item.constrs.is_empty() {
@@ -57,8 +70,8 @@ impl Codegen {
             writeln!(self.buf)?;
         }
 
-        let mut it = items.fns.into_iter().peekable();
-        while let Some(mut fun) = it.next() {
+        let len = items.fns.len();
+        for (i, mut fun) in items.fns.into_iter().enumerate() {
             let stmts = Lower::new(&mut self.idents).lower(take(&mut fun.item.item.body));
             if fun.item.constrs.is_empty() {
                 self.fun_def(&fun.item, None, &stmts)?;
@@ -68,7 +81,7 @@ impl Codegen {
                     self.with_mono(env, |s| s.fun_def(&fun.item, Some(*name), &stmts))?;
                 }
             }
-            if it.peek().is_some() {
+            if i != len - 1 {
                 writeln!(self.buf)?;
             }
         }
