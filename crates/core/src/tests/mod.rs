@@ -24,7 +24,10 @@ fn it_parses() {
     }
 }
 
-const RESOLVE_TEXTS: &[&str] = &[include_str!("factorial.cront")];
+const RESOLVE_TEXTS: &[&str] = &[
+    include_str!("factorial.cront"),
+    include_str!("struct.cront"),
+];
 
 #[test]
 fn it_resolves() {

@@ -1,5 +1,5 @@
 use crate::syntax::parse::{
-    Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Sig, Stmt,
+    Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Member, Param, Sig, Stmt,
 };
 use crate::{Error, Result};
 use crate::{ResolveErr, Span};
@@ -35,13 +35,41 @@ impl Resolver {
                         self.with_constrs(constrs, |s| s.expr(typ.span, &mut typ.item));
                         Some(name.clone())
                     }
-                    Sig::Struct { .. } => todo!(),
+                    Sig::Struct {
+                        name,
+                        constrs,
+                        members,
+                        optional,
+                    } => {
+                        self.fresh(name);
+                        self.constrs(constrs);
+                        self.with_constrs(constrs, |s| {
+                            members.iter_mut().for_each(|m| {
+                                let mut names = UstrSet::default();
+                                let m = m.inner_mut();
+                                let name = match m {
+                                    Member::Data(p) => {
+                                        s.param(p);
+                                        &p.name
+                                    }
+                                    Member::Type(c) => {
+                                        s.constr(c);
+                                        &c.typ
+                                    }
+                                };
+                                s.check_duplicate_name(&mut names, name);
+                            });
+                            if let Some(optional) = optional {
+                                s.param(optional.inner_mut())
+                            }
+                        });
+                        Some(name.clone())
+                    }
                 };
                 let Some(name) = name else { return };
-                if !names.insert(name.item.text) {
-                    return self.duplicate_name(name);
+                if self.check_duplicate_name(&mut names, &name) {
+                    self.globals.insert(name.item.text, name.item.id);
                 }
-                self.globals.insert(name.item.text, name.item.id);
             });
         }
         file.decls.iter_mut().for_each(|decl| {
@@ -87,26 +115,28 @@ impl Resolver {
         self.fresh(&mut fun.name);
         self.constrs(&mut fun.constrs);
         self.with_constrs(&fun.constrs, |s| {
-            fun.params.iter_mut().for_each(|p| {
-                let p = p.inner_mut();
-                s.fresh(&mut p.name);
-                s.expr(p.typ.span, &mut p.typ.item)
-            });
+            fun.params.iter_mut().for_each(|p| s.param(p.inner_mut()));
             if let Some(ret) = &mut fun.ret {
                 s.expr(ret.span, &mut ret.item)
             }
         });
     }
 
+    fn param(&mut self, p: &mut Param) {
+        self.fresh(&mut p.name);
+        self.expr(p.typ.span, &mut p.typ.item)
+    }
+
     fn constrs(&mut self, cs: &mut [Span<Doc<Constr>>]) {
-        cs.iter_mut().for_each(|p| {
-            let c = p.inner_mut();
-            self.fresh(&mut c.typ);
-            self.expr(c.constr.span, &mut c.constr.item);
-            if let Some(default) = &mut c.default {
-                self.expr(default.span, &mut default.item);
-            }
-        })
+        cs.iter_mut().for_each(|p| self.constr(p.inner_mut()))
+    }
+
+    fn constr(&mut self, c: &mut Constr) {
+        self.fresh(&mut c.typ);
+        self.expr(c.constr.span, &mut c.constr.item);
+        if let Some(default) = &mut c.default {
+            self.expr(default.span, &mut default.item);
+        }
     }
 
     fn with_constrs<R, F: FnOnce(&mut Self) -> R>(&mut self, cs: &[Span<Doc<Constr>>], f: F) -> R {
@@ -128,9 +158,15 @@ impl Resolver {
         ret
     }
 
-    fn duplicate_name(&mut self, name: Span<Ident>) {
-        self.errs
-            .push(name.map(|n| ResolveErr::DuplicateName(n.text)))
+    fn check_duplicate_name(&mut self, names: &mut UstrSet, name: &Span<Ident>) -> bool {
+        let inserted = names.insert(name.item.text);
+        if !inserted {
+            self.errs.push(Span::new(
+                name.span,
+                ResolveErr::DuplicateName(name.item.text),
+            ));
+        }
+        inserted
     }
 
     fn name(&mut self, span: SimpleSpan, name: &mut Ident) {
@@ -212,7 +248,6 @@ impl Resolver {
     fn expr(&mut self, span: SimpleSpan, expr: &mut Expr) {
         match expr {
             Expr::Ident(name) => self.name(span, name),
-            Expr::BuiltinType(..) => (),
             Expr::Apply(callee, args) | Expr::Call { callee, args, .. } => {
                 self.expr(callee.span, &mut callee.item);
                 args.iter_mut().for_each(|x| self.expr(x.span, &mut x.item));
@@ -224,10 +259,6 @@ impl Resolver {
                     self.expr(len.span, &mut len.item);
                 }
             }
-            Expr::Integer(..) => (),
-            Expr::Float(..) => (),
-            Expr::String(..) => (),
-            Expr::Boolean(..) => (),
             Expr::BinaryOp { lhs, rhs, .. } => {
                 self.expr(lhs.span, &mut lhs.item);
                 self.expr(rhs.span, &mut rhs.item);
@@ -242,6 +273,12 @@ impl Resolver {
                 self.expr(callee.span, &mut callee.item);
                 args.iter_mut().for_each(|e| self.expr(e.span, &mut e.item))
             }
+
+            Expr::BuiltinType(..)
+            | Expr::Integer(..)
+            | Expr::Float(..)
+            | Expr::String(..)
+            | Expr::Boolean(..) => (),
         }
     }
 }
