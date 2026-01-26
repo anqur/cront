@@ -18,11 +18,20 @@ pub fn build(file: &Path) {
     }
     let compiler = builder.get_compiler();
     let is_gnu_or_clang = compiler.is_like_gnu() || compiler.is_like_clang();
+    let is_msvc = compiler.is_like_msvc();
     let mut cmd = compiler.to_command();
+    let out = file.with_extension(if cfg!(target_os = "windows") {
+        "exe"
+    } else if cfg!(debug_assertions) {
+        "out"
+    } else {
+        ""
+    });
     if is_gnu_or_clang {
-        cmd.arg("-o")
-            .arg(file.with_extension(if cfg!(debug_assertions) { "out" } else { "" }));
-    };
+        cmd.arg("-o").arg(out);
+    } else if is_msvc {
+        cmd.arg(format!("/Fe:{}", out.display()));
+    }
     if !cmd.arg(file).spawn().unwrap().wait().unwrap().success() {
         panic!("build failed")
     }

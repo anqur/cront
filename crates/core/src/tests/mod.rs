@@ -2,6 +2,14 @@ use crate::syntax::parse::parse;
 use crate::{build, check, generate, resolve};
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
+use std::process::Command;
+
+fn test_dir() -> PathBuf {
+    PathBuf::new()
+        .join(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join("tests")
+}
 
 const PARSE_TEXTS: &[&str] = &[
     include_str!("println.cront"),
@@ -59,11 +67,7 @@ const BUILD_FILES: &[&str] = &["factorial.cront", "generic.cront"];
 #[test]
 fn it_builds() {
     for file in BUILD_FILES {
-        let path = PathBuf::new()
-            .join(env!("CARGO_MANIFEST_DIR"))
-            .join("src")
-            .join("tests")
-            .join(file);
+        let path = test_dir().join(file);
         let out = path.with_extension("c");
         let text = read_to_string(&path).unwrap();
         let mut file = parse(&text);
@@ -71,4 +75,25 @@ fn it_builds() {
         write(&out, generate(check(&mut file).unwrap())).unwrap();
         build(&out);
     }
+}
+
+#[test]
+#[ignore]
+fn it_runs() {
+    test_dir()
+        .read_dir()
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().unwrap().is_file())
+        .filter_map(|f| {
+            let path = f.path();
+            if matches!( path.extension(), Some(ext) if ext == "exe" || ext == "out") {
+                return Some(path);
+            }
+            None
+        })
+        .for_each(|f| {
+            eprintln!("Running {}", f.display());
+            assert!(Command::new(f).spawn().unwrap().wait().unwrap().success())
+        });
 }
