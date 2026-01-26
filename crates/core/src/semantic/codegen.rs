@@ -36,7 +36,16 @@ impl Codegen {
 
         writeln!(self.buf)?;
 
-        for fun in items.fns.iter() {
+        for s in &items.structs {
+            // TODO: Monomorphization, and member definitions.
+            write!(self.buf, "struct ")?;
+            self.ident(&s.item.name)?;
+            writeln!(self.buf, ";")?;
+        }
+
+        writeln!(self.buf)?;
+
+        for fun in &items.fns {
             if fun.item.constrs.is_empty() {
                 self.fun_sig(&fun.item, None, true)?;
             } else {

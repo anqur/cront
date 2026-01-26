@@ -55,6 +55,7 @@ fn it_checks() {
 const GENERATION_TEXTS: &[&str] = &[
     include_str!("factorial.cront"),
     include_str!("generic.cront"),
+    include_str!("struct.cront"),
 ];
 
 #[test]
@@ -66,7 +67,7 @@ fn it_generates() {
     }
 }
 
-const BUILD_FILES: &[&str] = &["factorial.cront", "generic.cront"];
+const BUILD_FILES: &[&str] = &["factorial.cront", "generic.cront", "struct.cront"];
 
 #[test]
 fn it_builds() {
