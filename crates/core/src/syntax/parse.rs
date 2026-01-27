@@ -32,7 +32,7 @@ impl Idents {
     }
 }
 
-#[derive(Copy, Clone, Eq, Ord)]
+#[derive(Copy, Clone, Eq)]
 pub struct Ident {
     pub(crate) text: Ustr,
     pub(crate) id: u64,
@@ -77,7 +77,13 @@ impl Hash for Ident {
 
 impl PartialOrd for Ident {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.id.partial_cmp(&other.id)
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Ident {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
     }
 }
 
