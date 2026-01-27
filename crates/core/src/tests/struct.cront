@@ -1,5 +1,8 @@
 struct A {
-    n: U32;
+    a: U32;
+    b: U32;
+    c: U32;
+    d: U32;
 }
 
 struct Data<T> {

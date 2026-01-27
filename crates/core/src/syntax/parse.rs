@@ -9,6 +9,7 @@ use chumsky::prelude::{Input, IterParser, SimpleSpan, choice, just, recursive};
 use chumsky::primitive::select;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde_json::from_str;
+use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
@@ -31,7 +32,7 @@ impl Idents {
     }
 }
 
-#[derive(Copy, Clone, Eq)]
+#[derive(Copy, Clone, Eq, Ord)]
 pub struct Ident {
     pub(crate) text: Ustr,
     pub(crate) id: u64,
@@ -71,6 +72,12 @@ impl PartialEq for Ident {
 impl Hash for Ident {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+impl PartialOrd for Ident {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.id.partial_cmp(&other.id)
     }
 }
 

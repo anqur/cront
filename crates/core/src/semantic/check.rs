@@ -4,8 +4,8 @@ use crate::syntax::parse::{
 };
 use crate::{BuiltinType, CheckErr, Error, Float, FunType, Integer, Result, Span, Type};
 use chumsky::prelude::SimpleSpan;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, HashMap};
 use std::mem::take;
 
 pub fn check(file: &mut File) -> Result<Items> {
@@ -54,7 +54,7 @@ struct Checker {
     items: Items,
     errs: Vec<Span<CheckErr>>,
     mono: HashMap<Ident, HashMap<Vec<Type>, Ident>>,
-    structs: HashMap<Ident, StructType>,
+    structs: BTreeMap<Ident, StructType>,
 }
 
 impl Checker {
@@ -107,24 +107,18 @@ impl Checker {
                     let typ = Type::Struct(name.item);
                     let (types, data, optional) = self.with_constrs(&constrs, |s| {
                         let mut types = HashMap::default();
-                        let mut data = HashMap::default();
-                        members
-                            .iter_mut()
-                            .enumerate()
-                            .for_each(|(i, m)| match m.inner_mut() {
-                                Member::Data(p) => {
-                                    data.insert(
-                                        p.name.item,
-                                        (s.check_type(p.typ.span, &mut p.typ.item), i),
-                                    );
-                                }
-                                Member::Type(c) => {
-                                    types.insert(
-                                        c.typ.item,
-                                        s.check_type(c.constr.span, &mut c.constr.item),
-                                    );
-                                }
-                            });
+                        let mut data = BTreeMap::default();
+                        members.iter_mut().for_each(|m| match m.inner_mut() {
+                            Member::Data(p) => {
+                                data.insert(p.name.item, s.check_type(p.typ.span, &mut p.typ.item));
+                            }
+                            Member::Type(c) => {
+                                types.insert(
+                                    c.typ.item,
+                                    s.check_type(c.constr.span, &mut c.constr.item),
+                                );
+                            }
+                        });
                         let optional = optional.as_mut().map(|t| {
                             let span = t.span;
                             let param = t.inner_mut();
@@ -184,15 +178,11 @@ impl Checker {
                 .map(|name| {
                     let StructType {
                         constrs,
-                        data: data_map,
+                        data,
                         optional,
                         ..
                     } = self.structs.remove(&name.item).unwrap();
-                    let mut data = vec![None; data_map.len()];
-                    for (name, (typ, i)) in data_map {
-                        data[i] = Some((name, typ));
-                    }
-                    let data = data.into_iter().flatten().collect();
+                    let data = data.into_iter().collect();
                     Span::new(
                         name.span,
                         Item {
@@ -637,7 +627,7 @@ struct StructType {
     constrs: Vec<(Ident, Type)>,
     #[allow(dead_code)]
     types: HashMap<Ident, Type>,
-    data: HashMap<Ident, (Type, usize)>,
+    data: BTreeMap<Ident, Type>,
     optional: Option<(Ident, Type)>,
 }
 
