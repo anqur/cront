@@ -106,7 +106,10 @@ impl BuiltinType {
     }
 
     fn is_unsigned_integer(&self) -> bool {
-        matches!(self, Self::U8 | Self::U16 | Self::U32 | Self::U64)
+        matches!(
+            self,
+            Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::USize
+        )
     }
 
     fn narrow_float(&self, n: f64) -> Float {
