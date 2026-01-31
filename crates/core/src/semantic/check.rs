@@ -409,17 +409,20 @@ impl Checker {
         args: I,
         params: &[Type],
     ) {
-        self.check_arity(span, got, params.len());
-        args.zip(params.iter()).for_each(|(got, want)| {
-            self.check(got.span, &mut got.item, want);
-        })
+        if self.check_arity(span, got, params.len()) {
+            args.zip(params.iter()).for_each(|(got, want)| {
+                self.check(got.span, &mut got.item, want);
+            })
+        }
     }
 
-    fn check_arity(&mut self, span: SimpleSpan, got: usize, want: usize) {
+    fn check_arity(&mut self, span: SimpleSpan, got: usize, want: usize) -> bool {
         if got != want {
             self.errs
-                .push(Span::new(span, CheckErr::ArityMismatch { got, want }))
+                .push(Span::new(span, CheckErr::ArityMismatch { got, want }));
+            return false;
         }
+        true
     }
 
     fn check_number(
