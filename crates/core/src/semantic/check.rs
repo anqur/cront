@@ -84,7 +84,7 @@ impl Checker {
                     if file.main.as_ref() == Some(&fun.name.item) {
                         self.check_arity(fun.name.span, fun.params.len(), 0);
                         if !matches!(item.item.ret, Type::CType { to, .. } if to == "int") {
-                            self.type_mismatch_msg(span, &item.item.ret, "CInt".to_string());
+                            self.type_mismatch(span, &item.item.ret, "CInt");
                         }
                     }
                     fns.push(item);
@@ -435,7 +435,7 @@ impl Checker {
         if self.is_number_type(&got) {
             self.check(rhs.span, &mut rhs.item, &got);
         } else {
-            self.type_mismatch_msg(lhs.span, &got, "number".to_string());
+            self.type_mismatch(lhs.span, &got, "number");
         }
         *typ = Some(Box::new(got.to_expr(lhs.span)));
         got
@@ -466,7 +466,7 @@ impl Checker {
                     let got = self.infer(len.span, &mut len.item).rhs;
                     if !matches!(got, Type::Builtin(b) if b.is_unsigned_integer()) {
                         // TODO: Should be a compile-time constant.
-                        self.type_mismatch_msg(len.span, &got, "number".to_string());
+                        self.type_mismatch(len.span, &got, "number");
                     }
                     Box::new(got)
                 });
@@ -475,7 +475,7 @@ impl Checker {
             Expr::Apply(t, args) => {
                 let Inferred { mut lhs, rhs } = self.infer(t.span, &mut t.item);
                 let Type::Generic { typ, mut ret, .. } = rhs else {
-                    self.type_mismatch_msg(t.span, &rhs, "generic".to_string());
+                    self.type_mismatch(t.span, &rhs, "generic");
                     return Inferred::value(rhs);
                 };
                 let types = args
@@ -519,7 +519,7 @@ impl Checker {
                         typ.ret
                     }
                     got => {
-                        self.type_mismatch_msg(span, &got, "function".to_string());
+                        self.type_mismatch(span, &got, "function");
                         got
                     }
                 };
@@ -581,18 +581,12 @@ impl Checker {
         }
     }
 
-    fn type_mismatch(&mut self, span: SimpleSpan, got: &Type, want: &Type) {
-        if matches!(want, Type::Unknown) {
-            return;
-        }
-        self.type_mismatch_msg(span, got, want.to_string());
-    }
-
-    fn type_mismatch_msg(&mut self, span: SimpleSpan, got: &Type, want: String) {
+    fn type_mismatch<T: ToString + ?Sized>(&mut self, span: SimpleSpan, got: &Type, want: &T) {
         if matches!(got, Type::Unknown) {
             return;
         }
         let got = got.to_string();
+        let want = want.to_string();
         self.errs
             .push(Span::new(span, CheckErr::TypeMismatch { got, want }))
     }
