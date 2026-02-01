@@ -171,6 +171,7 @@ impl Checker {
             self.items.fns.iter_mut().for_each(|f| {
                 if let Some(mono) = self.mono.remove(&f.item.name) {
                     f.item.mono = mono.into_iter().collect();
+                    f.item.mono.sort_by_key(|(.., ident)| *ident);
                 }
             });
             self.items.structs = structs
