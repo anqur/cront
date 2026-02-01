@@ -212,8 +212,10 @@ impl Codegen {
                 s.expr(e)?;
                 writeln!(s.buf, ";")
             }
-            Stmt::Assign { name, typ, rhs } => {
-                s.expr(&typ.as_ref().unwrap().item)?;
+            Stmt::Assign {
+                name, rhs, checked, ..
+            } => {
+                s.typ(&checked.as_ref().unwrap().item)?;
                 write!(s.buf, " ")?;
                 s.ident(&name.item)?;
                 write!(s.buf, " = ")?;
@@ -268,8 +270,8 @@ impl Codegen {
             }
             Stmt::Break => writeln!(s.buf, "break;"),
             Stmt::Continue => writeln!(s.buf, "continue;"),
-            Stmt::Decl { name, typ } => {
-                s.expr(&typ.item)?;
+            Stmt::Decl { name, checked } => {
+                s.typ(&checked.item)?;
                 write!(s.buf, " ")?;
                 s.ident(&name.item)?;
                 writeln!(s.buf, ";")
@@ -390,12 +392,14 @@ impl<'a> Lower<'a> {
                 stmt
             }
             Stmt::Decl { .. } => unreachable!(),
-            Stmt::Assign { name, typ, rhs } => {
+            Stmt::Assign {
+                name, rhs, checked, ..
+            } => {
                 self.decls.push(Span::new(
                     span,
                     Stmt::Decl {
                         name: name.clone(),
-                        typ: typ.unwrap(),
+                        checked: checked.unwrap(),
                     },
                 ));
                 Span::new(span, Stmt::Update { name, rhs })
@@ -417,7 +421,7 @@ impl<'a> Lower<'a> {
                     span,
                     Stmt::Decl {
                         name: exit.clone(),
-                        typ: Span::new(span, Expr::BuiltinType(BuiltinType::Bool)),
+                        checked: Span::new(span, Type::Builtin(BuiltinType::Bool)),
                     },
                 ));
                 lifted.push(Span::new(
@@ -470,9 +474,9 @@ impl<'a> Lower<'a> {
         }
 
         if depth > 0
-            && let Expr::BinaryOp { typ, .. } | Expr::Call { typ, .. } = expr
-            && let Some(typ) = typ.as_deref()
-            && !matches!(&typ.item, Expr::BuiltinType(BuiltinType::Void))
+            && let Expr::BinaryOp { checked, .. } | Expr::Call { checked, .. } = expr
+            && let Some(typ) = checked.as_ref()
+            && !matches!(&typ.item, Type::Builtin(BuiltinType::Void))
         {
             // Only lift non-void expressions.
             self.replace_expr(span, Some(typ.clone()), expr, lifted);
@@ -482,7 +486,7 @@ impl<'a> Lower<'a> {
     fn replace_expr(
         &mut self,
         span: SimpleSpan,
-        typ: Option<Span<Expr>>,
+        checked: Option<Span<Type>>,
         expr: &mut Expr,
         lifted: &mut Vec<Span<Stmt>>,
     ) {
@@ -491,7 +495,7 @@ impl<'a> Lower<'a> {
             span,
             Stmt::Decl {
                 name: name.clone(),
-                typ: typ.unwrap(),
+                checked: checked.unwrap(),
             },
         ));
         lifted.push(Span::new(

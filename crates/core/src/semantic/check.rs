@@ -316,7 +316,13 @@ impl Checker {
     fn stmt(&mut self, block: &mut Block, stmt: &mut Span<Stmt>) -> Type {
         match &mut stmt.item {
             Stmt::Expr(e) => self.infer(stmt.span, e).rhs,
-            Stmt::Assign { name, typ, rhs, .. } => {
+            Stmt::Assign {
+                name,
+                typ,
+                rhs,
+                checked,
+            } => {
+                let typ_span = typ.as_ref().map(|t| t.span).unwrap_or(name.span);
                 let rhs_type = typ
                     .as_mut()
                     .map(|t| {
@@ -326,7 +332,7 @@ impl Checker {
                     })
                     .unwrap_or_else(|| self.infer(rhs.span, &mut rhs.item).rhs);
                 self.insert(block, name.item, rhs_type.clone());
-                *typ = Some(rhs_type.to_expr(typ.as_ref().map(|t| t.span).unwrap_or(name.span)));
+                *checked = Some(Span::new(typ_span, rhs_type.clone()));
                 rhs_type
             }
             Stmt::Update { name, rhs } => {
@@ -429,7 +435,7 @@ impl Checker {
         &mut self,
         lhs: &mut Span<Expr>,
         rhs: &mut Span<Expr>,
-        typ: &mut Option<Box<Span<Expr>>>,
+        checked: &mut Option<Span<Type>>,
     ) -> Type {
         let got = self.infer(lhs.span, &mut lhs.item).rhs;
         if self.is_number_type(&got) {
@@ -437,7 +443,7 @@ impl Checker {
         } else {
             self.type_mismatch(lhs.span, &got, "number");
         }
-        *typ = Some(Box::new(got.to_expr(lhs.span)));
+        *checked = Some(lhs.with(got.clone()));
         got
     }
 
@@ -512,7 +518,11 @@ impl Checker {
             }
             Expr::String(..) => Type::Builtin(BuiltinType::Str),
             Expr::Boolean(..) => Type::Builtin(BuiltinType::Bool),
-            Expr::Call { callee, args, typ } => {
+            Expr::Call {
+                callee,
+                args,
+                checked,
+            } => {
                 let ret = match self.infer(callee.span, &mut callee.item).rhs {
                     Type::Fun(typ) => {
                         self.check_args(span, args.len(), args.iter_mut(), &typ.params);
@@ -523,21 +533,26 @@ impl Checker {
                         got
                     }
                 };
-                *typ = Some(Box::new(ret.to_expr(span)));
+                *checked = Some(Span::new(span, ret.clone()));
                 ret
             }
-            Expr::BinaryOp { lhs, op, typ, rhs } => match op {
+            Expr::BinaryOp {
+                lhs,
+                op,
+                rhs,
+                checked,
+            } => match op {
                 Symbol::EqEq => {
                     let got = self.infer(lhs.span, &mut lhs.item).rhs;
                     self.check(rhs.span, &mut rhs.item, &got);
-                    *typ = Some(Box::new(got.to_expr(lhs.span)));
+                    *checked = Some(lhs.with(got));
                     Type::Builtin(BuiltinType::Bool)
                 }
                 Symbol::Lt | Symbol::Gt | Symbol::Le | Symbol::Ge => {
-                    self.check_number(lhs, rhs, typ);
+                    self.check_number(lhs, rhs, checked);
                     Type::Builtin(BuiltinType::Bool)
                 }
-                Symbol::Plus | Symbol::Minus | Symbol::Mul => self.check_number(lhs, rhs, typ),
+                Symbol::Plus | Symbol::Minus | Symbol::Mul => self.check_number(lhs, rhs, checked),
                 _ => unreachable!(),
             },
             Expr::Object(..) => todo!(),

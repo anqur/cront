@@ -7,8 +7,8 @@ mod tests;
 pub use crate::semantic::check::check;
 pub use crate::semantic::codegen::generate;
 pub use crate::semantic::resolve::resolve;
+use crate::syntax::parse::Ident;
 pub use crate::syntax::parse::parse;
-use crate::syntax::parse::{Expr, Ident};
 pub use build::build;
 use chumsky::prelude::SimpleSpan;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -188,18 +188,6 @@ impl Type {
                 constr: Box::new(constr),
                 ret: Box::new(ret),
             })
-    }
-
-    fn to_expr(&self, span: SimpleSpan) -> Span<Expr> {
-        Span::new(
-            span,
-            match self {
-                Self::Builtin(t) => Expr::BuiltinType(*t),
-                Self::Ref(t) => Expr::RefType(Box::new(t.to_expr(span))),
-                Self::Ident(id) => Expr::Ident(*id),
-                _ => unreachable!(),
-            },
-        )
     }
 
     fn to_builtin(&self) -> Option<BuiltinType> {

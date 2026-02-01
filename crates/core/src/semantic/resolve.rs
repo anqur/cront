@@ -210,7 +210,7 @@ impl Resolver {
     fn stmt(&mut self, block: &mut Block, stmt: &mut Span<Stmt>) {
         match &mut stmt.item {
             Stmt::Expr(e) => self.expr(stmt.span, e),
-            Stmt::Assign { name, typ, rhs } => {
+            Stmt::Assign { name, typ, rhs, .. } => {
                 self.fresh(name);
                 if let Some(typ) = typ {
                     self.expr(typ.span, &mut typ.item);

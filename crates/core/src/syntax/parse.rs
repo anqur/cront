@@ -1,6 +1,6 @@
 use crate::syntax::lex::{Keyword, Symbol, Token, lex};
 use crate::syntax::{Span, SyntaxError};
-use crate::{BuiltinType, Float, Integer};
+use crate::{BuiltinType, Float, Integer, Type};
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;
 use chumsky::input::{MapExtra, ValueInput};
@@ -207,6 +207,7 @@ pub enum Stmt {
         name: Span<Ident>,
         typ: Option<Span<Expr>>,
         rhs: Span<Expr>,
+        checked: Option<Span<Type>>,
     },
     Update {
         name: Span<Ident>,
@@ -228,7 +229,7 @@ pub enum Stmt {
 
     Decl {
         name: Span<Ident>,
-        typ: Span<Expr>,
+        checked: Span<Type>,
     },
 }
 
@@ -258,13 +259,13 @@ pub enum Expr {
     Call {
         callee: Box<Span<Self>>,
         args: Vec<Span<Self>>,
-        typ: Option<Box<Span<Self>>>,
+        checked: Option<Span<Type>>,
     },
     BinaryOp {
         lhs: Box<Span<Self>>,
         op: Symbol,
-        typ: Option<Box<Span<Self>>>,
         rhs: Box<Span<Self>>,
+        checked: Option<Span<Type>>,
     },
     Object(Box<Span<Self>>, Vec<(Span<Ustr>, Span<Expr>)>),
     #[allow(dead_code)]
@@ -292,10 +293,15 @@ impl Expr {
         let Token::Symbol(op) = op else {
             unreachable!()
         };
-        let lhs = Box::new(lhs);
-        let rhs = Box::new(rhs);
-        let typ = None;
-        Span::from_map_extra(Self::BinaryOp { lhs, op, typ, rhs }, e)
+        Span::from_map_extra(
+            Self::BinaryOp {
+                lhs: Box::new(lhs),
+                op,
+                rhs: Box::new(rhs),
+                checked: None,
+            },
+            e,
+        )
     }
 }
 
@@ -409,7 +415,7 @@ where
                         Chainer::Args(args) => Expr::Call {
                             callee: Box::new(a),
                             args,
-                            typ: None,
+                            checked: None,
                         },
                         Chainer::Initialize(xs) => Expr::Object(Box::new(a), xs),
                         Chainer::Access(m) => Expr::Access(Box::new(a), m),
@@ -472,7 +478,12 @@ where
         .then_ignore(just(Token::Symbol(Symbol::Eq)))
         .then(expr())
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
-        .map(|((name, typ), rhs)| Stmt::Assign { name, typ, rhs })
+        .map(|((name, typ), rhs)| Stmt::Assign {
+            name,
+            typ,
+            rhs,
+            checked: None,
+        })
         .map_with(Span::from_map_extra)
         .labelled("assignment statement");
 
