@@ -1,5 +1,6 @@
 use crate::syntax::parse::parse;
 use crate::{build, check, generate, resolve};
+use snapbox::{Data, assert_data_eq};
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
 use std::process::Command;
@@ -52,18 +53,17 @@ fn it_checks() {
     }
 }
 
-const GENERATION_TEXTS: &[&str] = &[
-    include_str!("factorial.cront"),
-    include_str!("generic.cront"),
-    include_str!("struct.cront"),
-];
+const GENERATION_FILES: &[&str] = &["factorial.cront", "generic.cront", "struct.cront"];
 
 #[test]
 fn it_generates() {
-    for text in GENERATION_TEXTS {
-        let mut file = parse(text);
+    for file in GENERATION_FILES {
+        let path = test_dir().join(file);
+        let data = Data::read_from(&path.with_extension("snap.c"), None);
+        let text = read_to_string(path).unwrap();
+        let mut file = parse(&text);
         resolve(&mut file).unwrap();
-        print!("{}", generate(check(&mut file).unwrap()));
+        assert_data_eq!(generate(check(&mut file).unwrap()), data);
     }
 }
 
@@ -74,7 +74,7 @@ fn it_builds() {
     for file in BUILD_FILES {
         let path = test_dir().join(file);
         let out = path.with_extension("c");
-        let text = read_to_string(&path).unwrap();
+        let text = read_to_string(path).unwrap();
         let mut file = parse(&text);
         resolve(&mut file).unwrap();
         write(&out, generate(check(&mut file).unwrap())).unwrap();

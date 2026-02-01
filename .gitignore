@@ -10,6 +10,8 @@ dist/
 target/
 
 *.c
+!*.snap.c
+
 *.out
 *.dSYM
 *.exe
