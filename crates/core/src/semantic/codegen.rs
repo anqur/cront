@@ -393,8 +393,12 @@ impl<'a> Lower<'a> {
             }
             Stmt::Decl { .. } => unreachable!(),
             Stmt::Assign {
-                name, rhs, checked, ..
+                name,
+                mut rhs,
+                checked,
+                ..
             } => {
+                self.expr(0, span, &mut rhs.item, lifted);
                 self.decls.push(Span::new(
                     span,
                     Stmt::Decl {
