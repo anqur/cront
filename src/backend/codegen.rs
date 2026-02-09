@@ -1,4 +1,4 @@
-use crate::frontend::parse::{Builtin, Expr, Ident, Idents, Stmt};
+use crate::frontend::ast::{Builtin, Expr, Ident, Idents, Stmt};
 use crate::middleend::check::{FunItem, Item, Items};
 use crate::{BuiltinType, Span, Type};
 use chumsky::prelude::SimpleSpan;

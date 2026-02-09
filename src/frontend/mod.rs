@@ -1,3 +1,4 @@
+pub(crate) mod ast;
 pub(crate) mod lex;
 pub(crate) mod parse;
 

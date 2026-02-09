@@ -1,7 +1,7 @@
-use crate::frontend::lex::Symbol;
-use crate::frontend::parse::{
+use crate::frontend::ast::{
     Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Member, Sig, Stmt,
 };
+use crate::frontend::lex::Symbol;
 use crate::{BuiltinType, CheckErr, Error, Float, FunType, Integer, Result, Span, Type};
 use chumsky::prelude::SimpleSpan;
 use std::collections::hash_map::Entry;

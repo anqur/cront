@@ -6,7 +6,7 @@ mod middleend;
 mod tests;
 
 pub use crate::cli::build::build;
-use crate::frontend::parse::Ident;
+use crate::frontend::ast::Ident;
 use chumsky::prelude::SimpleSpan;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::result::Result as StdResult;
