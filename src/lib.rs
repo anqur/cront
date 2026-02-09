@@ -1,15 +1,12 @@
 mod backend;
+mod cli;
 mod frontend;
 mod middleend;
 #[cfg(test)]
 mod tests;
 
-pub use crate::backend::codegen::generate;
+pub use crate::cli::build::build;
 use crate::frontend::parse::Ident;
-pub use crate::frontend::parse::parse;
-pub use crate::middleend::check::check;
-pub use crate::middleend::resolve::resolve;
-pub use backend::build::build;
 use chumsky::prelude::SimpleSpan;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::result::Result as StdResult;

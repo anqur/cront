@@ -1,7 +1,7 @@
 use cc::Build;
 use std::path::Path;
 
-pub fn build(file: &Path) {
+pub fn compile(file: &Path) {
     let target = env!("CC_TARGET");
     let mut builder = Build::new();
     builder
@@ -33,6 +33,6 @@ pub fn build(file: &Path) {
         cmd.arg(format!("/Fe:{}", out.display()));
     }
     if !cmd.arg(file).spawn().unwrap().wait().unwrap().success() {
-        panic!("build failed")
+        panic!("compile failed")
     }
 }

@@ -1,7 +1,5 @@
-mod build;
-
-use crate::build::build;
 use clap::{Parser, Subcommand};
+use cront::build;
 use std::path::Path;
 
 fn main() {

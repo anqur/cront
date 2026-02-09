@@ -1,5 +1,8 @@
+use crate::backend::codegen::generate;
+use crate::backend::compile::compile;
 use crate::frontend::parse::parse;
-use crate::{build, check, generate, resolve};
+use crate::middleend::check::check;
+use crate::middleend::resolve::resolve;
 use snapbox::{Data, assert_data_eq};
 use std::fs::{read_to_string, write};
 use std::path::PathBuf;
@@ -70,7 +73,7 @@ fn it_generates() {
 const BUILD_FILES: &[&str] = &["factorial.cront", "generic.cront", "struct.cront"];
 
 #[test]
-fn it_builds() {
+fn it_compiles() {
     for file in BUILD_FILES {
         let path = test_dir().join(file);
         let out = path.with_extension("c");
@@ -78,7 +81,7 @@ fn it_builds() {
         let mut file = parse(&text);
         resolve(&mut file).unwrap();
         write(&out, generate(check(&mut file).unwrap())).unwrap();
-        build(&out);
+        compile(&out);
     }
 }
 
