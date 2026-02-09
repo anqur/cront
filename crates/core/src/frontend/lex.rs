@@ -1,5 +1,5 @@
 use crate::BuiltinType;
-use crate::syntax::{Span, SyntaxError};
+use crate::frontend::{Span, SyntaxError};
 use chumsky::Parser;
 use chumsky::container::Container;
 use chumsky::error::Rich;

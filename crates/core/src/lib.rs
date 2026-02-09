@@ -1,15 +1,15 @@
-mod build;
-mod semantic;
-mod syntax;
+mod backend;
+mod frontend;
+mod middleend;
 #[cfg(test)]
 mod tests;
 
-pub use crate::semantic::check::check;
-pub use crate::semantic::codegen::generate;
-pub use crate::semantic::resolve::resolve;
-use crate::syntax::parse::Ident;
-pub use crate::syntax::parse::parse;
-pub use build::build;
+pub use crate::backend::codegen::generate;
+use crate::frontend::parse::Ident;
+pub use crate::frontend::parse::parse;
+pub use crate::middleend::check::check;
+pub use crate::middleend::resolve::resolve;
+pub use backend::build::build;
 use chumsky::prelude::SimpleSpan;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::result::Result as StdResult;

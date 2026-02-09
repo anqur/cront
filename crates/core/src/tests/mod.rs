@@ -1,4 +1,4 @@
-use crate::syntax::parse::parse;
+use crate::frontend::parse::parse;
 use crate::{build, check, generate, resolve};
 use snapbox::{Data, assert_data_eq};
 use std::fs::{read_to_string, write};

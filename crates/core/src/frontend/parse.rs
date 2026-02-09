@@ -1,5 +1,5 @@
-use crate::syntax::lex::{Keyword, Symbol, Token, lex};
-use crate::syntax::{Span, SyntaxError};
+use crate::frontend::lex::{Keyword, Symbol, Token, lex};
+use crate::frontend::{Span, SyntaxError};
 use crate::{BuiltinType, Float, Integer, Type};
 use chumsky::Parser;
 use chumsky::extra::ParserExtra;

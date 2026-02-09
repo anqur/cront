@@ -1,5 +1,5 @@
-use crate::syntax::lex::Symbol;
-use crate::syntax::parse::{
+use crate::frontend::lex::Symbol;
+use crate::frontend::parse::{
     Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Member, Sig, Stmt,
 };
 use crate::{BuiltinType, CheckErr, Error, Float, FunType, Integer, Result, Span, Type};

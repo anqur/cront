@@ -1,4 +1,4 @@
-use crate::syntax::parse::{
+use crate::frontend::parse::{
     Branch, Builtin, Constr, Def, Doc, Expr, File, Fun, Ident, Idents, Member, Param, Sig, Stmt,
 };
 use crate::{Error, Result};
