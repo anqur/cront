@@ -5,9 +5,8 @@ use crate::frontend::lex::{Keyword, Symbol, Token, lex};
 use crate::frontend::{Span, SyntaxError};
 use crate::{BuiltinType, Float, Integer};
 use chumsky::Parser;
-use chumsky::input::ValueInput;
 use chumsky::pratt::{infix, left, prefix};
-use chumsky::prelude::{IterParser, SimpleSpan, choice, just, recursive};
+use chumsky::prelude::{IterParser, choice, just, recursive};
 use chumsky::primitive::select;
 use serde_json::from_str;
 use ustr::Ustr;
@@ -22,16 +21,12 @@ enum Chainer {
 
 type ParseError<'a> = SyntaxError<'a, Token>;
 
-fn grouped_by<'t, I, O, P>(
+fn grouped_by<'t, O>(
     lhs: Symbol,
-    parser: P,
+    parser: impl Parser<'t, &'t [Token], O, ParseError<'t>> + Clone,
     sep: Symbol,
     rhs: Symbol,
-) -> impl Parser<'t, I, Vec<O>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-    P: Parser<'t, I, O, ParseError<'t>> + Clone,
-{
+) -> impl Parser<'t, &'t [Token], Vec<O>, ParseError<'t>> + Clone {
     parser
         .separated_by(just(Token::Symbol(sep)))
         .allow_trailing()
@@ -39,10 +34,7 @@ where
         .delimited_by(just(Token::Symbol(lhs)), just(Token::Symbol(rhs)))
 }
 
-fn name<'t, I>() -> impl Parser<'t, I, Span<Ustr>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn name<'t>() -> impl Parser<'t, &'t [Token], Span<Ustr>, ParseError<'t>> + Clone {
     select(|x, _| match x {
         Token::Ident(n) => Some(n),
         _ => None,
@@ -51,17 +43,11 @@ where
     .labelled("name")
 }
 
-fn ident<'t, I>() -> impl Parser<'t, I, Span<Ident>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn ident<'t>() -> impl Parser<'t, &'t [Token], Span<Ident>, ParseError<'t>> + Clone {
     name().map(|n| n.map(Ident::unbound))
 }
 
-fn expr<'t, I>() -> impl Parser<'t, I, Span<Expr>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn expr<'t>() -> impl Parser<'t, &'t [Token], Span<Expr>, ParseError<'t>> + Clone {
     let constant = select(|x, _| {
         Some(match x {
             Token::Number(n) => {
@@ -171,10 +157,7 @@ where
     })
 }
 
-fn stmt<'t, I>() -> impl Parser<'t, I, Span<Stmt>, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn stmt<'t>() -> impl Parser<'t, &'t [Token], Span<Stmt>, ParseError<'t>> {
     let assign = just(Token::Keyword(Keyword::Let))
         .ignore_then(ident())
         .then(
@@ -284,10 +267,7 @@ where
     })
 }
 
-fn docstring<'t, I>() -> impl Parser<'t, I, Vec<String>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn docstring<'t>() -> impl Parser<'t, &'t [Token], Vec<String>, ParseError<'t>> + Clone {
     select(|x, _| match x {
         Token::Doc(s) => Some(s),
         _ => None,
@@ -297,10 +277,7 @@ where
     .labelled("docstring")
 }
 
-fn constr<'t, I>() -> impl Parser<'t, I, Span<Constr>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn constr<'t>() -> impl Parser<'t, &'t [Token], Span<Constr>, ParseError<'t>> + Clone {
     ident()
         .then(
             just(Token::Symbol(Symbol::Colon))
@@ -316,10 +293,7 @@ where
         .map_with(Span::from_map_extra)
 }
 
-fn constrs<'t, I>() -> impl Parser<'t, I, Vec<Span<Doc<Constr>>>, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn constrs<'t>() -> impl Parser<'t, &'t [Token], Vec<Span<Doc<Constr>>>, ParseError<'t>> {
     let constr = docstring()
         .then(constr())
         .map(|(doc, c)| c.map(|item| Doc { doc, item }))
@@ -330,10 +304,7 @@ where
         .labelled("constraints")
 }
 
-fn param<'t, I>() -> impl Parser<'t, I, Span<Doc<Param>>, ParseError<'t>> + Clone
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn param<'t>() -> impl Parser<'t, &'t [Token], Span<Doc<Param>>, ParseError<'t>> + Clone {
     docstring()
         .then(ident())
         .then(just(Token::Symbol(Symbol::Colon)).ignore_then(expr()))
@@ -344,10 +315,7 @@ where
         .map_with(Span::from_map_extra)
 }
 
-fn func<'t, I>() -> impl Parser<'t, I, Span<Doc<Decl>>, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn func<'t>() -> impl Parser<'t, &'t [Token], Span<Doc<Decl>>, ParseError<'t>> {
     let param = param().labelled("parameter");
 
     let params =
@@ -387,10 +355,7 @@ where
         .labelled("function definition")
 }
 
-fn typ<'t, I>() -> impl Parser<'t, I, Span<Doc<Decl>>, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn typ<'t>() -> impl Parser<'t, &'t [Token], Span<Doc<Decl>>, ParseError<'t>> {
     docstring()
         .then_ignore(just(Token::Keyword(Keyword::Typ)))
         .then(ident())
@@ -409,10 +374,7 @@ where
         .labelled("type alias definition")
 }
 
-fn r#struct<'t, I>() -> impl Parser<'t, I, Span<Doc<Decl>>, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn r#struct<'t>() -> impl Parser<'t, &'t [Token], Span<Doc<Decl>>, ParseError<'t>> {
     let data = param()
         .then_ignore(just(Token::Symbol(Symbol::Semi)))
         .map(|p| p.map(|p| p.map(Member::Data)))
@@ -469,10 +431,7 @@ where
         .labelled("struct definition")
 }
 
-fn file<'t, I>() -> impl Parser<'t, I, File, ParseError<'t>>
-where
-    I: ValueInput<'t, Token = Token, Span = SimpleSpan>,
-{
+fn file<'t>() -> impl Parser<'t, &'t [Token], File, ParseError<'t>> {
     choice((func(), typ(), r#struct()))
         .repeated()
         .collect::<Vec<_>>()
