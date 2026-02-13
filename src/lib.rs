@@ -57,6 +57,12 @@ impl<T> Span<T> {
     }
 }
 
+impl<T: PartialEq> PartialEq for Span<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.item == other.item
+    }
+}
+
 #[derive(Default, Debug, Copy, Clone, Hash, Eq, PartialEq, EnumString, Display)]
 pub enum BuiltinType {
     #[default]

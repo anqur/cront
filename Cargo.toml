@@ -8,12 +8,10 @@ strum = { version = "0.27.2", features = ["derive"] }
 num_enum = "0.7.5"
 ustr = "1.1.0"
 chumsky = { version = "1.0.0-alpha.8", features = ["pratt"] }
+cstree = { version = "0.13.0", features = ["derive"] }
 serde_json = "1.0.149"
 cc = "1.2.53"
-
-[dependencies.clap]
-version = "4.5.54"
-features = ["derive"]
+clap = { version = "4.5.54", features = ["derive"] }
 
 [dev-dependencies]
-snapbox = { version = "0.6.24", features = ["path"] }
+snapbox = { version = "1.0.0", features = ["path"] }

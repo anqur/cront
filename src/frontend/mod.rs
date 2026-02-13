@@ -1,4 +1,6 @@
 pub(crate) mod ast;
+#[expect(dead_code)]
+mod cst;
 pub(crate) mod lex;
 pub(crate) mod parse;
 
