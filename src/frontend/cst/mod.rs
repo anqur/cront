@@ -12,9 +12,7 @@ use cstree::build::{Checkpoint, NodeCache};
 use cstree::prelude::{GreenNodeBuilder, SyntaxNode};
 use std::ops::Range;
 
-struct Tokens<'t> {
-    tokens: &'t [Span<Kind>],
-}
+struct Tokens<'t>(&'t [Span<Kind>]);
 
 impl<'t> Input<'t> for Tokens<'t> {
     type Span = SimpleSpan;
@@ -35,29 +33,29 @@ impl<'t> Input<'t> for Tokens<'t> {
         cache: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        if *cursor >= cache.tokens.len() {
+        if *cursor >= cache.0.len() {
             None
         } else {
-            let token = cache.tokens[*cursor].clone();
+            let token = cache.0[*cursor].clone();
             *cursor += 1;
             Some(token)
         }
     }
 
     unsafe fn span(cache: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
-        let start = if cache.tokens.is_empty() {
+        let start = if cache.0.is_empty() {
             0
-        } else if *range.start >= cache.tokens.len() {
-            cache.tokens[*range.start - 1].span.end
+        } else if *range.start >= cache.0.len() {
+            cache.0[*range.start - 1].span.end
         } else {
-            cache.tokens[*range.start].span.start
+            cache.0[*range.start].span.start
         };
-        let end = if cache.tokens.is_empty() {
+        let end = if cache.0.is_empty() {
             0
-        } else if *range.end == cache.tokens.len() {
-            cache.tokens.last().unwrap().span.end
+        } else if *range.end == cache.0.len() {
+            cache.0.last().unwrap().span.end
         } else {
-            cache.tokens[*range.end].span.start
+            cache.0[*range.end].span.start
         };
         SimpleSpan::from(start..end)
     }
