@@ -1,4 +1,5 @@
 mod lex;
+mod parse;
 
 use crate::Span;
 use chumsky::container::{OrderedSeq, Seq};
@@ -80,6 +81,19 @@ enum Kind {
     StmtBreak,
     StmtContinue,
     StmtReturn,
+
+    // Expression nodes.
+    ExprArrayType,
+    ExprRefType,
+    ExprBinaryOp,
+    ExprCall,
+
+    // Call expression nodes.
+    CallArgs,
+    CallObject,
+    CallMethod,
+    CallAccess,
+    CallTypeArgs,
 
     // Blanks.
     Whitespace,
