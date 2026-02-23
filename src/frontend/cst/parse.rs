@@ -5,7 +5,8 @@ use chumsky::input::MapExtra;
 use chumsky::pratt::{infix, left, prefix};
 use chumsky::prelude::{Recursive, choice, custom, just};
 use chumsky::{Parser, extra};
-use cstree::build::Checkpoint;
+use cstree::build::{Checkpoint, NodeCache};
+use cstree::prelude::SyntaxNode;
 
 type ParseError<'t> = extra::Full<Rich<'t, Span<Kind>>, Builder<'t>, ()>;
 
@@ -182,4 +183,28 @@ fn expr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
 
     expr.define(expr_);
     expr
+}
+
+pub(super) struct State<'t> {
+    pub(super) cst: SyntaxNode<Kind>,
+    pub(super) cache: NodeCache<'static>,
+    pub(super) errs: Vec<Rich<'t, Span<Kind>>>,
+}
+
+impl<'t> State<'t> {
+    fn parse_with<'s, P>(src: &'t str, tokens: &'t [Span<Kind>], parser: P) -> Self
+    where
+        P: Parser<'t, Tokens<'t>, (), ParseError<'t>>,
+    {
+        let mut builder = Builder::new(src);
+        let (.., errs) = parser
+            .parse_with_state(tokens.into(), &mut builder)
+            .into_output_errors();
+        let (cst, cache) = builder.finish();
+        Self { cst, cache, errs }
+    }
+
+    pub(super) fn parse_expr(src: &'t str, tokens: &'t [Span<Kind>]) -> Self {
+        Self::parse_with(src, tokens, expr())
+    }
 }

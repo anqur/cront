@@ -15,6 +15,12 @@ use std::ops::Range;
 
 struct Tokens<'t>(&'t [Span<Kind>]);
 
+impl<'t> From<&'t [Span<Kind>]> for Tokens<'t> {
+    fn from(t: &'t [Span<Kind>]) -> Self {
+        Self(t)
+    }
+}
+
 impl<'t> Input<'t> for Tokens<'t> {
     type Span = SimpleSpan;
     type Token = Span<Kind>;
@@ -240,5 +246,21 @@ impl<'t> Inspector<'t, Tokens<'t>> for Builder<'t> {
         marker: &chumsky::input::Checkpoint<'t, 'parse, Tokens<'t>, Self::Checkpoint>,
     ) {
         self.builder.revert_to(*marker.inspector())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::frontend::cst::{lex, parse};
+
+    #[test]
+    fn it_parses() {
+        const TEXT: &str = "1 + 2";
+        let lexed = lex::State::lex(TEXT);
+        assert!(lexed.errs.is_empty());
+        let parsed = parse::State::parse_expr(&lexed.src, &lexed.tokens);
+        assert!(parsed.errs.is_empty());
+        // TODO: Snapshots.
+        println!("{}", parsed.cst.debug(parsed.cache.interner(), true));
     }
 }

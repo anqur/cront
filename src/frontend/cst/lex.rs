@@ -129,7 +129,7 @@ fn token<'src>() -> impl Parser<'src, &'src str, Kind, LexError<'src>> {
     ))
 }
 
-pub(super) fn lex<'src>() -> impl Parser<'src, &'src str, Vec<Span<Kind>>, LexError<'src>> {
+fn lex<'src>() -> impl Parser<'src, &'src str, Vec<Span<Kind>>, LexError<'src>> {
     token()
         .recover_with(via_parser(
             any()
@@ -141,4 +141,18 @@ pub(super) fn lex<'src>() -> impl Parser<'src, &'src str, Vec<Span<Kind>>, LexEr
         .map_with(Span::from_map_extra)
         .repeated()
         .collect()
+}
+
+pub(super) struct State<'s> {
+    pub(super) src: &'s str,
+    pub(super) tokens: Vec<Span<Kind>>,
+    pub(super) errs: Vec<Rich<'s, char>>,
+}
+
+impl<'s> State<'s> {
+    pub(super) fn lex(src: &'s str) -> Self {
+        let (tokens, errs) = lex().parse(src).into_output_errors();
+        let tokens = tokens.unwrap_or_default();
+        State { src, tokens, errs }
+    }
 }
