@@ -84,9 +84,19 @@ enum Kind {
     Struct,
 
     // Statement nodes.
+    StmtAssign,
+    StmtUpdate,
     StmtBreak,
     StmtContinue,
     StmtReturn,
+    StmtExpr,
+    StmtIf,
+    StmtWhile,
+
+    // Branch nodes.
+    Branch,
+    BranchCond,
+    BranchElse,
 
     // Expression nodes.
     ExprArrayType,
@@ -254,11 +264,27 @@ mod test {
     use crate::frontend::cst::{lex, parse};
 
     #[test]
-    fn it_parses() {
+    fn it_parses_expr() {
         const TEXT: &str = "1 + 2";
         let lexed = lex::State::lex(TEXT);
         assert!(lexed.errs.is_empty());
         let parsed = parse::State::parse_expr(&lexed.src, &lexed.tokens);
+        assert!(parsed.errs.is_empty());
+        // TODO: Snapshots.
+        println!("{}", parsed.cst.debug(parsed.cache.interner(), true));
+    }
+
+    #[test]
+    fn it_parses_stmt() {
+        const TEXT: &str = r#"if f(a) {
+    let a: U32 = 1;
+    return a + 2;
+} else if b + c {
+    return 42;
+}"#;
+        let lexed = lex::State::lex(TEXT);
+        assert!(lexed.errs.is_empty());
+        let parsed = parse::State::parse_stmt(&lexed.src, &lexed.tokens);
         assert!(parsed.errs.is_empty());
         // TODO: Snapshots.
         println!("{}", parsed.cst.debug(parsed.cache.interner(), true));
