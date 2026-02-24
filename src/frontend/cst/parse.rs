@@ -155,7 +155,7 @@ fn expr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
 
     let op = |op: Kind| checkpoint().then_ignore(just(op)).padded_by(ws());
 
-    let expr_ = checkpoint()
+    let def = checkpoint()
         .then_ignore(call)
         .pratt((
             prefix(
@@ -181,8 +181,143 @@ fn expr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
         .try_map(with_effect)
         .boxed();
 
-    expr.define(expr_);
+    expr.define(def);
     expr
+}
+fn stmt<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    let assign = as_node(
+        Kind::StmtAssign,
+        just(Kind::KwLet)
+            .then_ignore(ws())
+            .ignore_then(just(Kind::Ident))
+            .then_ignore(ws())
+            .then(
+                just(Kind::SymColon)
+                    .ignore_then(expr().padded_by(ws()))
+                    .or_not(),
+            )
+            .then_ignore(just(Kind::SymEq))
+            .then_ignore(ws())
+            .then(expr())
+            .then_ignore(ws())
+            .then_ignore(just(Kind::SymSemi))
+            .labelled("assignment statement"),
+    );
+
+    let update = as_node(
+        Kind::StmtUpdate,
+        just(Kind::Ident)
+            .then_ignore(ws())
+            .then_ignore(just(Kind::SymEq))
+            .then_ignore(ws())
+            .then(expr())
+            .then_ignore(ws())
+            .then_ignore(just(Kind::SymSemi))
+            .labelled("update statement"),
+    );
+
+    let r#break = as_node(
+        Kind::StmtBreak,
+        just(Kind::KwBreak)
+            .then_ignore(ws())
+            .then(just(Kind::SymSemi))
+            .labelled("break statement"),
+    );
+
+    let r#continue = as_node(
+        Kind::StmtContinue,
+        just(Kind::KwContinue)
+            .then_ignore(ws())
+            .then(just(Kind::SymSemi))
+            .labelled("continue statement"),
+    );
+
+    let r#return = as_node(
+        Kind::StmtReturn,
+        just(Kind::KwReturn)
+            .then_ignore(ws())
+            .ignore_then(expr().padded_by(ws()).or_not())
+            .then_ignore(just(Kind::SymSemi))
+            .labelled("return statement"),
+    );
+
+    let exp = as_node(
+        Kind::StmtExpr,
+        expr()
+            .then_ignore(ws())
+            .then_ignore(just(Kind::SymSemi))
+            .labelled("expression statement"),
+    );
+
+    let cond = |kind| as_node(Kind::BranchCond, just(kind).then_ignore(ws()).then(expr()));
+
+    let mut stmt = Recursive::declare();
+
+    let stmts = stmt
+        .clone()
+        .padded_by(ws())
+        .repeated()
+        .labelled("statements")
+        .boxed();
+
+    let branch = as_node(
+        Kind::Branch,
+        cond(Kind::KwIf)
+            .then_ignore(ws())
+            .then(
+                stmts
+                    .clone()
+                    .delimited_by(just(Kind::SymLBrace), just(Kind::SymRBrace)),
+            )
+            .labelled("if branch"),
+    )
+    .boxed();
+
+    let r#if = as_node(
+        Kind::StmtIf,
+        branch
+            .clone()
+            .then(
+                just(Kind::KwElse)
+                    .ignore_then(ws())
+                    .ignore_then(branch)
+                    .padded_by(ws())
+                    .repeated(),
+            )
+            .then(as_node(
+                Kind::BranchElse,
+                just(Kind::KwElse)
+                    .then_ignore(ws())
+                    .then(
+                        stmts
+                            .clone()
+                            .delimited_by(just(Kind::SymLBrace), just(Kind::SymRBrace)),
+                    )
+                    .or_not(),
+            ))
+            .labelled("if statement"),
+    );
+
+    let r#while = as_node(
+        Kind::StmtWhile,
+        cond(Kind::KwWhile)
+            .then_ignore(ws())
+            .then(
+                stmts
+                    .clone()
+                    .delimited_by(just(Kind::SymLBrace), just(Kind::SymRBrace)),
+            )
+            .labelled("while statement"),
+    );
+
+    let def = choice((
+        r#if, r#while, r#break, r#continue, assign, update, r#return, exp,
+    ))
+    .labelled("statement")
+    .boxed();
+
+    stmt.define(def);
+    stmt
 }
 
 pub(super) struct State<'t> {
@@ -206,5 +341,9 @@ impl<'t> State<'t> {
 
     pub(super) fn parse_expr(src: &'t str, tokens: &'t [Span<Kind>]) -> Self {
         Self::parse_with(src, tokens, expr())
+    }
+
+    pub(super) fn parse_stmt(src: &'t str, tokens: &'t [Span<Kind>]) -> Self {
+        Self::parse_with(src, tokens, stmt())
     }
 }
