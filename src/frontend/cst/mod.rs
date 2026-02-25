@@ -83,6 +83,10 @@ enum Kind {
     Typ,
     Struct,
 
+    // Parametrized nodes.
+    Param,
+    Constr,
+
     // Statement nodes.
     StmtAssign,
     StmtUpdate,

@@ -47,9 +47,9 @@ pub fn ws<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
     .repeated()
 }
 
-fn grouped_by<'t>(
+fn grouped_by<'t, O>(
     lhs: Kind,
-    parser: impl Parser<'t, Tokens<'t>, (), ParseError<'t>>,
+    parser: impl Parser<'t, Tokens<'t>, O, ParseError<'t>>,
     sep: Kind,
     rhs: Kind,
 ) -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
@@ -57,7 +57,6 @@ fn grouped_by<'t>(
         .padded_by(ws())
         .separated_by(just(sep))
         .allow_trailing()
-        .try_map(with_effect)
         .delimited_by(just(lhs), just(rhs))
 }
 
@@ -121,8 +120,7 @@ fn expr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
             Kind::SymLBrace,
             just(Kind::Ident)
                 .then_ignore(just(Kind::SymEq))
-                .then(expr.clone())
-                .try_map(with_effect),
+                .then(expr.clone()),
             Kind::SymComma,
             Kind::SymRBrace,
         )
@@ -318,6 +316,54 @@ fn stmt<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
 
     stmt.define(def);
     stmt
+}
+
+fn docstring<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    just(Kind::Doc)
+        .padded_by(ws())
+        .repeated()
+        .labelled("docstring")
+}
+
+fn constr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    as_node(
+        Kind::Constr,
+        just(Kind::Ident)
+            .then_ignore(ws())
+            .then(
+                just(Kind::SymColon)
+                    .ignore_then(expr().padded_by(ws()))
+                    .or_not(),
+            )
+            .then(
+                just(Kind::SymEq)
+                    .ignore_then(expr().padded_by(ws()))
+                    .or_not(),
+            )
+            .labelled("constraint"),
+    )
+}
+
+fn constrs<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    grouped_by(
+        Kind::SymLt,
+        docstring().then_ignore(ws()).then(constr()),
+        Kind::SymComma,
+        Kind::SymGt,
+    )
+    .or_not()
+    .try_map(with_effect)
+    .labelled("constraints")
+}
+
+fn param<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    docstring()
+        .then_ignore(ws())
+        .then(just(Kind::Ident))
+        .then_ignore(ws())
+        .then(just(Kind::SymColon).then_ignore(ws()).ignore_then(expr()))
+        .try_map(with_effect)
+        .labelled("parameter")
 }
 
 pub(super) struct State<'t> {
