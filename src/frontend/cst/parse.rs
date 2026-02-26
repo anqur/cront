@@ -328,7 +328,9 @@ fn docstring<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
 fn constr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
     as_node(
         Kind::Constr,
-        just(Kind::Ident)
+        docstring()
+            .then_ignore(ws())
+            .then(just(Kind::Ident))
             .then_ignore(ws())
             .then(
                 just(Kind::SymColon)
@@ -345,25 +347,58 @@ fn constr<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
 }
 
 fn constrs<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
-    grouped_by(
-        Kind::SymLt,
-        docstring().then_ignore(ws()).then(constr()),
-        Kind::SymComma,
-        Kind::SymGt,
-    )
-    .or_not()
-    .try_map(with_effect)
-    .labelled("constraints")
+    grouped_by(Kind::SymLt, constr(), Kind::SymComma, Kind::SymGt).labelled("constraints")
 }
 
 fn param<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
-    docstring()
-        .then_ignore(ws())
-        .then(just(Kind::Ident))
-        .then_ignore(ws())
-        .then(just(Kind::SymColon).then_ignore(ws()).ignore_then(expr()))
-        .try_map(with_effect)
-        .labelled("parameter")
+    as_node(
+        Kind::Param,
+        docstring()
+            .then_ignore(ws())
+            .then_ignore(just(Kind::Ident))
+            .then_ignore(ws())
+            .then_ignore(just(Kind::SymColon).then_ignore(ws()).ignore_then(expr()))
+            .labelled("parameter"),
+    )
+}
+
+fn params<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    grouped_by(Kind::SymLParen, param(), Kind::SymComma, Kind::SymRParen).labelled("parameters")
+}
+
+fn func<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    as_node(
+        Kind::Fun,
+        docstring()
+            .then_ignore(ws())
+            .then_ignore(just(Kind::KwFun))
+            .then_ignore(ws())
+            .then(
+                just(Kind::Ident)
+                    .then_ignore(just(Kind::SymColonColon).padded_by(ws()))
+                    .or_not(),
+            )
+            .then(just(Kind::Ident))
+            .then_ignore(ws())
+            .then(constrs().then_ignore(ws()).or_not())
+            .then(params())
+            .then_ignore(ws())
+            .then(expr().then_ignore(ws()).or_not())
+            .then(
+                stmt()
+                    .padded_by(ws())
+                    .repeated()
+                    .delimited_by(just(Kind::SymLBrace), just(Kind::SymRBrace)),
+            )
+            .labelled("function definition"),
+    )
+}
+
+fn file<'t>() -> impl Parser<'t, Tokens<'t>, (), ParseError<'t>> {
+    as_node(
+        Kind::File,
+        func().padded_by(ws()).repeated().labelled("file"),
+    )
 }
 
 pub(super) struct State<'t> {
@@ -391,5 +426,9 @@ impl<'t> State<'t> {
 
     pub(super) fn parse_stmt(src: &'t str, tokens: &'t [Span<Kind>]) -> Self {
         Self::parse_with(src, tokens, stmt())
+    }
+
+    pub(super) fn parse(src: &'t str, tokens: &'t [Span<Kind>]) -> Self {
+        Self::parse_with(src, tokens, file())
     }
 }

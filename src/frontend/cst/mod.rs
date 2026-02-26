@@ -293,4 +293,24 @@ mod test {
         // TODO: Snapshots.
         println!("{}", parsed.cst.debug(parsed.cache.interner(), true));
     }
+
+    #[test]
+    fn it_parses_factorial() {
+        const TEXT: &str = r#"
+fun factorial(n: U32) U32 {
+    let a: U32 = 1;
+    while n > 1 {
+        a = a * n;
+        n = n - 1;
+    }
+    return a;
+}
+"#;
+        let lexed = lex::State::lex(TEXT);
+        assert!(lexed.errs.is_empty());
+        let parsed = parse::State::parse(&lexed.src, &lexed.tokens);
+        assert!(parsed.errs.is_empty());
+        // TODO: Snapshots.
+        println!("{}", parsed.cst.debug(parsed.cache.interner(), true));
+    }
 }
